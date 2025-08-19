@@ -8,7 +8,7 @@ MetaStrainer is a python tool used for recovering strain-level genotypes of bact
 - samtools
 - bowtie2
 
-### python libraries
+### Python libraries
 - emcee
 - numpy
 - biopython
