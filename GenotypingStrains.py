@@ -42,6 +42,7 @@ parser.add_argument("-l","--linkgage", required=True, default="linkage_groups.tx
 parser.add_argument("-o","--output",default="SampleX_Statistics_",help="Name of output statistics")
 #parser.add_argument("-N","--Number", default=3, type=int,help="Number of strain peaks in MetaStrainer composition file")
 parser.add_argument("-S","--SampleName",default="",help="SampleName to name output strains as per Louis-Marie request")
+parser.add_argument("--singleton",default="../Preprocess/singles_singleton_noref.txt",help="Non-reference alleles file")
 parser.add_argument("-s","--StrainThreshold",default=99.5,type=float,help="Threshold for defining a strain for merging")
 parser.add_argument("-f","--FrequencyFile",required=True,help="File with initial sample composition")
 parser.add_argument('--logfile',help="Logging Errors",default="Genotyping_errorLog.txt")
@@ -50,6 +51,9 @@ args = parser.parse_args()
 
 #python /nas/longleaf/home/hazem/ReconAssScripts/GenotypeMetaStrainEight.py -i ../genotypes_$1.txt  -o Genotype -S $1 -f ../key_genotypes_$1.txt -g /nas/longleaf/home/hazem/core_genomes/Bifidobacterium_asteroides_core2/Basteroides_JACFPA01_family2gene_mapping_150.txt -r /nas/longleaf/home/hazem/core_genomes/Bifidobacterium_asteroides_core2/core_Bifidobacterium_asteroides_JACFPA01_0.fasta -l ../linkage_groups.txt
 #	
+
+if not os.path.exists(args.singleton):
+	sys.exit("Error reading Singleton Non-Reference allele file %s"%(args.singleton))
 
 geneMap = {}
 with open(args.genemap) as genemap_file:
@@ -243,7 +247,7 @@ strain3Changes =  N_strain3Changes = 0
 singletonNonRefAlleleCounter = 0
 #Count false Non-reference alleles if they are already identical to Reference!
 falseNonRefAllele = 0
-with open("singles_singleton_noref.txt","r") as single_noRef:
+with open(args.singleton,"r") as single_noRef:
 	lines = single_noRef.readline()
 	while lines:
 		lineContents = lines.strip("\n").split("\t")

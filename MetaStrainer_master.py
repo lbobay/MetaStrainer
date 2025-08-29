@@ -53,9 +53,25 @@ except ImportError:
     sys.exit("Insall packages emcee,numpy and Bio before proceeding")
 
 
+CurrentFolder = os.getcwd()
+print(CurrentFolder)
+
 if args.SampleName is None:
 	args.SampleName = os.path.basename(args.output)
-	
+
+#To avoid wrong paths #Hazem Sharaf Aug 29 2025
+if not os.path.exists(args.firstfile):
+	sys.exit("R1 Fastq file does not exist.")
+else:
+	if not "/" in args.firstfile:
+		args.firstfile = CurrentFolder + "/" + args.firstfile
+
+if not os.path.exists(args.secondfile):
+	sys.exit("R1 Fastq file does not exist.")
+else:
+	if not "/" in args.secondfile:
+		args.secondfile = CurrentFolder + "/" + args.secondfile
+
 
 #Check for folder existence
 if (os.path.isdir(args.output)):
@@ -84,7 +100,8 @@ for stuff in sys.argv:
 #Ceate Logs folder
 try:
 	os.mkdir(args.output+"/Logs/")
-except:
+except OSError as e:
+	print("Why exception? %s"%(e))
 	if (os.path.isdir(args.output+"/Logs")):
 		print("Logs folder already exists")
 	else:
@@ -107,22 +124,24 @@ ReferenceFolder = args.output+"/Reference/"
 #Get Reference name
 if not os.path.exists(args.reference):
     sys.exit("Reference Genbank file does not exist%s" %(args.reference))
+
+os.chdir(ReferenceFolder)    
 RefFileName = os.path.basename(args.reference)
 #ExtraCDSfromGenbank
 print("Extracting Genome sequence and gene features from %s"%(RefFileName))
 RefDBName = os.path.splitext(RefFileName)[0]
 #RefDBNameFasta = RefDBName + ".fasta"
-RefDBNameGenomeFasta = args.output+"/Reference/" +RefDBName + "_FullGenome.fasta"#RefSeq Syle
+RefDBNameGenomeFasta = ReferenceFolder +RefDBName + "_FullGenome.fasta"#RefSeq Syle
 #Gene Features with GeneBank coordinate (used downstream and in genotyping)
-RefDBNameFasta = args.output+"/Reference/" +RefDBName + ".fasta"
+RefDBNameFasta = ReferenceFolder +RefDBName + ".fasta"
 #Gene Features with flanking 5' and 3'regions (used from alignment only)
-RefDBNameFlankFasta = args.output+"/Reference/" +RefDBName + "_" + str(args.flankregion) +".fasta"
+RefDBNameFlankFasta = ReferenceFolder +RefDBName + "_" + str(args.flankregion) +".fasta"
 #Trimming information which may be modified from flank range if gene feature is at contig boundary
-RefDBNameRangeTrimming = args.output+"/Reference/" +RefDBName + "_flankTrim_" + str(args.flankregion) +".txt"
+RefDBNameRangeTrimming = ReferenceFolder +RefDBName + "_flankTrim_" + str(args.flankregion) +".txt"
 #GeneID Mapping between standard and flank modified fasta IDs
-RefDBNameRangeMapping = args.output+"/Reference/" +RefDBName + "_family2gene_mapping_" + str(args.flankregion) +".txt"
+RefDBNameRangeMapping = ReferenceFolder +RefDBName + "_family2gene_mapping_" + str(args.flankregion) +".txt"
 #Negative strand file
-RefDBNameNegstrand = args.output+"/Reference/" +RefDBName + "_negstrand.lst"
+RefDBNameNegstrand = ReferenceFolder +RefDBName + "_negstrand.lst"
 
 #os.system("python %sExtractCDSFromGenbank_CoreCruncher.py -i %s -o %s/Reference/%s -s %s/Reference/%s_negstrand.lst"%(loc,args.reference,args.output,RefDBNameFasta,args.output,RefDBName))
 retcode = os.system("python %sExtractFromGenbank.py -i %s -o %s -s %s -a %s"%(loc,args.reference,RefDBNameFasta,RefDBNameNegstrand,RefDBNameGenomeFasta))
@@ -158,10 +177,13 @@ except:
 		sys.exit("Error creating Mapping folder")
 MappingFolder=args.output+"/Mapping/"
 MappingName=MappingFolder+args.SampleName
+os.chdir(MappingFolder)
 
-os.system("bowtie2 -p %s -x %s%s --very-sensitive --no-unal -1 %s -2 %s 2>%sMapping.log | samtools view -@ %s -Sb - | samtools sort -@ %s -o %s_sort_sen_nounal.bam "
+retcode = os.system("bowtie2 -p %s -x %s%s --very-sensitive --no-unal -1 %s -2 %s 2>%sMapping.log | samtools view -@ %s -Sb - | samtools sort -@ %s -o %s_sort_sen_nounal.bam "
 	%(args.threads,ReferenceFolder,RefDBName,args.firstfile,args.secondfile,LogsFolder,args.threads,args.threads,MappingName))
 if (retcode != 0):
+	print("Failure running: bowtie2 -p %s -x %s%s --very-sensitive --no-unal -1 %s -2 %s 2>%sMapping.log | samtools view -@ %s -Sb - | samtools sort -@ %s -o %s_sort_sen_nounal.bam\n\n"
+	%(args.threads,ReferenceFolder,RefDBName,args.firstfile,args.secondfile,LogsFolder,args.threads,args.threads,MappingName))
 	sys.exit("Error mapping fastq files to reference")
 ExecutedCommands.write("bowtie2 -p %s -x %s%s --very-sensitive --no-unal -1 %s -2 %s 2>%sMapping.log | samtools view -@ %s -Sb - | samtools sort -@ %s -o %s_sort_sen_nounal.bam\n\n"
 	%(args.threads,ReferenceFolder,RefDBName,args.firstfile,args.secondfile,LogsFolder,args.threads,args.threads,MappingName))
@@ -190,6 +212,7 @@ except:
 	else:
 		sys.exit("Error creating Preprocess folder")
 PreprocessFolder=args.output+"/Preprocess/"
+os.chdir(PreprocessFolder)
 
 print("Processing Read Pairs")
 os.system("python %sPairingReads.py -s %s_sort_sen_nounal.sam -m %s -r %s -t %s -n %s > %sPairingReads.log"
@@ -217,18 +240,40 @@ ExecutedCommands.flush()
 
 
 #MetaStrainer
+try:
+	os.mkdir(args.output+"/MetaStrainer")
+except:
+	if (os.path.isdir(args.output+"/MetaStrainer")):
+		print("MetaStrainer folder already exists")
+	else:
+		sys.exit("Error creating MetaStrainer folder")
+MetaStrainerFolder=args.output+"/MetaStrainer/"
+os.chdir(MetaStrainerFolder)
+
 print("Running core MetaStrainer chain")
-os.system("python %sCoreChain.py -S %s -s contig_singles.txt -p contig_pairs.txt --seed %s > %sMetaStrainerChain.log"%(loc,args.SampleName,args.seed,LogsFolder))
+os.system("python %sCoreChain.py -S %s -s %scontig_singles.txt -p %scontig_pairs.txt --seed %s > %sMetaStrainerChain.log"
+	%(loc,args.SampleName,PreprocessFolder,PreprocessFolder,args.seed,LogsFolder))
 if (retcode != 0):
 	sys.exit("Error running MetaStrainer chain")
-ExecutedCommands.write("python %sCoreChain.py -S %s -s contig_singles.txt -p contig_pairs.txt --seed %s> %sMetaStrainerChain.log\n\n"%(loc,args.SampleName,args.seed,LogsFolder))
+ExecutedCommands.write("python %sCoreChain.py -S %s -s %scontig_singles.txt -p %scontig_pairs.txt --seed %s> %sMetaStrainerChain.log\n\n"
+	%(loc,args.SampleName,PreprocessFolder,PreprocessFolder,args.seed,LogsFolder))
 ExecutedCommands.flush()
 
 
 #Genotyping
+try:
+	os.mkdir(args.output+"/Output")
+except:
+	if (os.path.isdir(args.output+"/Output")):
+		print("Output folder already exists")
+	else:
+		sys.exit("Error creating Output folder")
+OutputFolder=args.output+"/Output/"
+os.chdir(OutputFolder)
+
 print("Producing strain genotypes")
-os.system("python %sGenotypingStrains.py -i genotypes_%s.txt -o Genotype -S %s  -f key_genotypes_%s.txt -g %s -r %s -l linkage_groups.txt > %sGenotype.Log"
-	%(loc,args.SampleName,args.SampleName,args.SampleName,RefDBNameRangeMapping,RefDBNameFasta,LogsFolder))
+os.system("python %sGenotypingStrains.py -i %sgenotypes_%s.txt -o Genotype -S %s  -f %skey_genotypes_%s.txt -g %s -r %s -l %slinkage_groups.txt > %sGenotype.Log"
+	%(loc,MetaStrainerFolder,args.SampleName,args.SampleName,MetaStrainerFolder,args.SampleName,RefDBNameRangeMapping,RefDBNameFasta,PreprocessFolder,LogsFolder))
 if (retcode != 0):
 	sys.exit("Error Genotyping Strains")
 else:
@@ -239,12 +284,8 @@ else:
 			print("Strains genotyped: %s"%(strainCount.strip()))
 os.system("date")
 
-ExecutedCommands.write("python %sGenotypingStrains.py -i genotypes_%s.txt -o Genotype -S %s  -f key_genotypes_%s.txt -g %s -r %s -l linkage_groups.txt > %sGenotype.Log\n\n"
-	%(loc,args.SampleName,args.SampleName,args.SampleName,RefDBNameRangeMapping,RefDBNameFasta,LogsFolder))
+ExecutedCommands.write("python %sGenotypingStrains.py -i %sgenotypes_%s.txt -o Genotype -S %s  -f %skey_genotypes_%s.txt -g %s -r %s -l %slinkage_groups.txt > %sGenotype.Log\n\n"
+	%(loc,MetaStrainerFolder,args.SampleName,args.SampleName,MetaStrainerFolder,args.SampleName,RefDBNameRangeMapping,RefDBNameFasta,PreprocessFolder,LogsFolder))
 ExecutedCommands.flush()
 
 #Optional
-
-
-
-
