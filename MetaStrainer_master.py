@@ -95,6 +95,9 @@ for stuff in sys.argv:
 	if "MetaStrainer_master.py" in stuff:
 		loc = stuff.split("MetaStrainer_master.py")[0]
 		print("Location= ",loc)
+		if not "/" in loc:
+			#assuming MetaStrainer is in current running folder
+			loc = CurrentFolder + "/"
 
 
 #Ceate Logs folder
