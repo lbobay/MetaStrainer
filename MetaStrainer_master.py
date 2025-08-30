@@ -65,13 +65,26 @@ if not os.path.exists(args.firstfile):
 else:
 	if not "/" in args.firstfile:
 		args.firstfile = CurrentFolder + "/" + args.firstfile
+	elif args.firstfile.startswith("./"):
+		args.firstfile = CurrentFolder + args.firstfile[1:]
+
 
 if not os.path.exists(args.secondfile):
 	sys.exit("R1 Fastq file does not exist.")
 else:
 	if not "/" in args.secondfile:
 		args.secondfile = CurrentFolder + "/" + args.secondfile
+	elif args.secondfile.startswith("./"):
+		args.secondfile = CurrentFolder + args.secondfile[1:]
 
+if not os.path.exists(args.reference):
+	sys.exit("Reference GenBank does not exist.")
+else:
+	if not "/" in args.reference:
+		args.reference = CurrentFolder + "/" + args.reference
+
+if not "/" in args.output:
+	args.output = CurrentFolder + "/" + args.output
 
 #Check for folder existence
 if (os.path.isdir(args.output)):
@@ -98,15 +111,16 @@ for stuff in sys.argv:
 		if not "/" in loc:
 			#assuming MetaStrainer is in current running folder
 			loc = CurrentFolder + "/"
+			print("Location= ",loc)
 
 
 #Ceate Logs folder
 try:
 	os.mkdir(args.output+"/Logs/")
 except OSError as e:
-	print("Why exception? %s"%(e))
+	#print("Why exception? %s"%(e))
 	if (os.path.isdir(args.output+"/Logs")):
-		print("Logs folder already exists")
+		print("Logs folder already exists. Overwriting.")
 	else:
 		sys.exit("Error creating Logs folder")
 LogsFolder = args.output+"/Logs/"
@@ -119,7 +133,7 @@ try:
 	os.mkdir(args.output+"/Reference")
 except:
 	if (os.path.isdir(args.output+"/Reference")):
-		print("Reference folder already exists")
+		print("Reference folder already exists. Overwriting.")
 	else:
 		sys.exit("Error creating Reference folder")
 ReferenceFolder = args.output+"/Reference/"
@@ -145,10 +159,14 @@ RefDBNameRangeTrimming = ReferenceFolder +RefDBName + "_flankTrim_" + str(args.f
 RefDBNameRangeMapping = ReferenceFolder +RefDBName + "_family2gene_mapping_" + str(args.flankregion) +".txt"
 #Negative strand file
 RefDBNameNegstrand = ReferenceFolder +RefDBName + "_negstrand.lst"
-
+print("python %sExtractFromGenbank.py -i %s -o %s -s %s -a %s"%(loc,args.reference,RefDBNameFasta,RefDBNameNegstrand,RefDBNameGenomeFasta))
 #os.system("python %sExtractCDSFromGenbank_CoreCruncher.py -i %s -o %s/Reference/%s -s %s/Reference/%s_negstrand.lst"%(loc,args.reference,args.output,RefDBNameFasta,args.output,RefDBName))
 retcode = os.system("python %sExtractFromGenbank.py -i %s -o %s -s %s -a %s"%(loc,args.reference,RefDBNameFasta,RefDBNameNegstrand,RefDBNameGenomeFasta))
 if (retcode != 0):
+	print("Handning error")
+	print(os.getcwd())
+	print("python %sExtractFromGenbank.py -i %s -o %s -s %s -a %s"%(loc,args.reference,RefDBNameFasta,RefDBNameNegstrand,RefDBNameGenomeFasta))
+	print(args.reference)
 	sys.exit("Error Extracting features from Genbank file")
 
 ExecutedCommands.write("python %sExtractFromGenbank.py -i %s -o %s -s %s -a %s\n\n"%(loc,args.reference,RefDBNameFasta,RefDBNameNegstrand,RefDBNameGenomeFasta))

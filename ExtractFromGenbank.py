@@ -35,7 +35,7 @@ parser.add_argument("-c","--coordinates", default="coord.lst", help="Coordinates
 args = parser.parse_args()
 
 if not (os.path.exists(args.input)):
-	errorMessage = "GenBank file" + args.input+ " for -i/--input does not exist"
+	errorMessage = "GeneBank file " + args.input+ " for -i/--input does not exist"
 	sys.exit(errorMessage)
 
 i = 0
