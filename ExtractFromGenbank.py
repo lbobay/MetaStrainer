@@ -78,18 +78,18 @@ for record in SeqIO.parse(args.input, "genbank"):
 
 			
 			#start is 0-based so increment by 1 for output to help with downstream parsing
-			start = start + 1
-			sequence_name = ">" + record.id + "_" + str(start) + "_" + str(end)
+			start_id = start + 1
+			sequence_name = ">" + record.id + "_" + str(start_id) + "_" + str(end)
 			
 			
 			if (feature.strand == -1):
 				sequence = str(record.seq[start:end].reverse_complement())
-				writeStrand.write(record.id + "_" + str(start) + "_" + str(end) + "\n")
+				writeStrand.write(record.id + "_" + str(start_id) + "_" + str(end) + "\n")
 			else:
 				sequence = str(record.seq[start:end])
 
 			writeOut.write(sequence_name + "\n" + sequence + "\n")
-			writeCoord.write(record.id +"\t" +str(start)+"\t"+str(end)+"\n")
+			writeCoord.write(record.id +"\t" +str(start_id)+"\t"+str(end)+"\n")
 			
 writeOut.close()
 writeStrand.close()
