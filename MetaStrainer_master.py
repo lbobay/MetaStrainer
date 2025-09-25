@@ -147,6 +147,7 @@ RefFileName = os.path.basename(args.reference)
 #ExtraCDSfromGenbank
 print("Extracting Genome sequence and gene features from %s"%(RefFileName))
 RefDBName = os.path.splitext(RefFileName)[0]
+RefDBNameFlank = RefDBName +"_" + str(args.flankregion)
 #RefDBNameFasta = RefDBName + ".fasta"
 RefDBNameGenomeFasta = ReferenceFolder +RefDBName + "_FullGenome.fasta"#RefSeq Syle
 #Gene Features with GeneBank coordinate (used downstream and in genotyping)
@@ -179,10 +180,10 @@ if (retcode != 0):
 ExecutedCommands.write("python %sAddFlankToGene.py -f %s -i coord.lst -o %s -r %s -s %s -m %s -t %s\n\n"%(loc,RefDBNameGenomeFasta,RefDBNameFlankFasta,args.flankregion,RefDBNameNegstrand,RefDBNameRangeMapping,RefDBNameRangeTrimming))
 ExecutedCommands.flush()
 
-retcode = os.system("bowtie2-build %s %s%s 1>%sBuildingBowtie.log"%(RefDBNameFlankFasta,ReferenceFolder,RefDBName,LogsFolder))
+retcode = os.system("bowtie2-build %s %s%s 1>%sBuildingBowtie.log"%(RefDBNameFlankFasta,ReferenceFolder,RefDBNameFlank,LogsFolder))
 if (retcode != 0):
 	sys.exit("Error building bowtie2 index")
-ExecutedCommands.write("bowtie2-build %s %s%s 1>%sBuildingBowtie.log\n\n"%(RefDBNameFlankFasta,ReferenceFolder,RefDBName,LogsFolder))
+ExecutedCommands.write("bowtie2-build %s %s%s 1>%sBuildingBowtie.log\n\n"%(RefDBNameFlankFasta,ReferenceFolder,RefDBNameFlank,LogsFolder))
 ExecutedCommands.flush()
 os.system("date")
 
@@ -201,13 +202,13 @@ MappingName=MappingFolder+args.SampleName
 os.chdir(MappingFolder)
 
 retcode = os.system("bowtie2 -p %s -x %s%s --very-sensitive --no-unal -1 %s -2 %s 2>%sMapping.log | samtools view -@ %s -Sb - | samtools sort -@ %s -o %s_sort_sen_nounal.bam "
-	%(args.threads,ReferenceFolder,RefDBName,args.firstfile,args.secondfile,LogsFolder,args.threads,args.threads,MappingName))
+	%(args.threads,ReferenceFolder,RefDBNameFlank,args.firstfile,args.secondfile,LogsFolder,args.threads,args.threads,MappingName))
 if (retcode != 0):
 	print("Failure running: bowtie2 -p %s -x %s%s --very-sensitive --no-unal -1 %s -2 %s 2>%sMapping.log | samtools view -@ %s -Sb - | samtools sort -@ %s -o %s_sort_sen_nounal.bam\n\n"
-	%(args.threads,ReferenceFolder,RefDBName,args.firstfile,args.secondfile,LogsFolder,args.threads,args.threads,MappingName))
+	%(args.threads,ReferenceFolder,RefDBNameFlank,args.firstfile,args.secondfile,LogsFolder,args.threads,args.threads,MappingName))
 	sys.exit("Error mapping fastq files to reference")
 ExecutedCommands.write("bowtie2 -p %s -x %s%s --very-sensitive --no-unal -1 %s -2 %s 2>%sMapping.log | samtools view -@ %s -Sb - | samtools sort -@ %s -o %s_sort_sen_nounal.bam\n\n"
-	%(args.threads,ReferenceFolder,RefDBName,args.firstfile,args.secondfile,LogsFolder,args.threads,args.threads,MappingName))
+	%(args.threads,ReferenceFolder,RefDBNameFlank,args.firstfile,args.secondfile,LogsFolder,args.threads,args.threads,MappingName))
 ExecutedCommands.flush()
 
 
