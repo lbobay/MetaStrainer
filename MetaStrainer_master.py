@@ -16,12 +16,13 @@ parser = argparse.ArgumentParser(
 	)
 
 #Required
-parser.add_argument("-1","--firstfile", required=True, help="Forward or first of pair")
-parser.add_argument("-2","--secondfile", required=True, help="Reverse or second of pair")
-parser.add_argument("-r","--reference", required=True, help="genbank reference")
-parser.add_argument("-f","--flankregion", required=True, type = int, help="flank region to be added up stream and downsteam of gene of interest.")
+parser.add_argument("-1","--firstfile", required=True, help="Forward or first of pair",type=os.path.abspath)
+parser.add_argument("-2","--secondfile", required=True, help="Reverse or second of pair",type=os.path.abspath)
+parser.add_argument("-r","--reference", required=True, help="GenBank reference",type=os.path.abspath)
 parser.add_argument("-o","--output", required=True, help="output foldername")
 #Optional
+#Nov 24 2025. Flank is now an optional with default value of 150. Long option changed from flankregion to readlength
+parser.add_argument("-f","--flankregion", default=150, type = int, help="flank region to be added up stream and downsteam of genes for mapping.")
 parser.add_argument("-S","--SampleName", help="Sample name. Can be helpful when batch running several samples. Default is output folder name")
 parser.add_argument("-s","--StrainThreshold",default=99.5,type=float,help="Threshold for defining a strain for merging")
 parser.add_argument("--threads", default=1, type = int, help="Number of threads to be used")
@@ -59,29 +60,16 @@ print(CurrentFolder)
 if args.SampleName is None:
 	args.SampleName = os.path.basename(args.output)
 
-#To avoid wrong paths #Hazem Sharaf Aug 29 2025
+#Nov 24 2025: Unrolled paths changes from Aug 29th 2025
+#This is accompanied by argparse changes by adding type=os.path.abspath option
 if not os.path.exists(args.firstfile):
 	sys.exit("R1 Fastq file does not exist.")
-else:
-	if not "/" in args.firstfile:
-		args.firstfile = CurrentFolder + "/" + args.firstfile
-	elif args.firstfile.startswith("./"):
-		args.firstfile = CurrentFolder + args.firstfile[1:]
-
 
 if not os.path.exists(args.secondfile):
-	sys.exit("R1 Fastq file does not exist.")
-else:
-	if not "/" in args.secondfile:
-		args.secondfile = CurrentFolder + "/" + args.secondfile
-	elif args.secondfile.startswith("./"):
-		args.secondfile = CurrentFolder + args.secondfile[1:]
+	sys.exit("R2 Fastq file does not exist.")
 
 if not os.path.exists(args.reference):
 	sys.exit("Reference GenBank does not exist.")
-else:
-	if not "/" in args.reference:
-		args.reference = CurrentFolder + "/" + args.reference
 
 if not "/" in args.output:
 	args.output = CurrentFolder + "/" + args.output
@@ -102,16 +90,10 @@ else:
 
 ExecutedCommands = open(args.output +"/ExecutedCommands.log","w")
 
-#Copied from CoreCruncher
-loc = ""
-for stuff in sys.argv:
-	if "MetaStrainer_master.py" in stuff:
-		loc = stuff.split("MetaStrainer_master.py")[0]
-		print("Location= ",loc)
-		if not "/" in loc:
-			#assuming MetaStrainer is in current running folder
-			loc = CurrentFolder + "/"
-			print("Location= ",loc)
+#Nov 24 2025: Making sure script calls use absolute paths when changing locations
+loc = ""#This variable will hold the path of the MetaStrainer code folder
+loc = os.path.dirname(os.path.abspath(__file__))
+loc = loc + "/"
 
 
 #Ceate Logs folder
@@ -147,24 +129,24 @@ RefFileName = os.path.basename(args.reference)
 #ExtraCDSfromGenbank
 print("Extracting Genome sequence and gene features from %s"%(RefFileName))
 RefDBName = os.path.splitext(RefFileName)[0]
-RefDBNameFlank = RefDBName +"_" + str(args.flankregion)
+RefDBNameFlank = RefDBName +"_" + str(args.readlength)#11242025: flankregion changed to readlength
 #RefDBNameFasta = RefDBName + ".fasta"
 RefDBNameGenomeFasta = ReferenceFolder +RefDBName + "_FullGenome.fasta"#RefSeq Syle
 #Gene Features with GeneBank coordinate (used downstream and in genotyping)
 RefDBNameFasta = ReferenceFolder +RefDBName + ".fasta"
 #Gene Features with flanking 5' and 3'regions (used from alignment only)
-RefDBNameFlankFasta = ReferenceFolder +RefDBName + "_" + str(args.flankregion) +".fasta"
+RefDBNameFlankFasta = ReferenceFolder +RefDBName + "_" + str(args.readlength) +".fasta"#11242025: flankregion changed to readlength
 #Trimming information which may be modified from flank range if gene feature is at contig boundary
-RefDBNameRangeTrimming = ReferenceFolder +RefDBName + "_flankTrim_" + str(args.flankregion) +".txt"
+RefDBNameRangeTrimming = ReferenceFolder +RefDBName + "_flankTrim_" + str(args.readlength) +".txt"#11242025: flankregion changed to readlength
 #GeneID Mapping between standard and flank modified fasta IDs
-RefDBNameRangeMapping = ReferenceFolder +RefDBName + "_family2gene_mapping_" + str(args.flankregion) +".txt"
+RefDBNameRangeMapping = ReferenceFolder +RefDBName + "_family2gene_mapping_" + str(args.readlength) +".txt"#11242025: flankregion changed to readlength
 #Negative strand file
 RefDBNameNegstrand = ReferenceFolder +RefDBName + "_negstrand.lst"
 print("python %sExtractFromGenbank.py -i %s -o %s -s %s -a %s"%(loc,args.reference,RefDBNameFasta,RefDBNameNegstrand,RefDBNameGenomeFasta))
 #os.system("python %sExtractCDSFromGenbank_CoreCruncher.py -i %s -o %s/Reference/%s -s %s/Reference/%s_negstrand.lst"%(loc,args.reference,args.output,RefDBNameFasta,args.output,RefDBName))
 retcode = os.system("python %sExtractFromGenbank.py -i %s -o %s -s %s -a %s"%(loc,args.reference,RefDBNameFasta,RefDBNameNegstrand,RefDBNameGenomeFasta))
 if (retcode != 0):
-	print("Handning error")
+	print("Handling error")
 	print(os.getcwd())
 	print("python %sExtractFromGenbank.py -i %s -o %s -s %s -a %s"%(loc,args.reference,RefDBNameFasta,RefDBNameNegstrand,RefDBNameGenomeFasta))
 	print(args.reference)
@@ -172,12 +154,11 @@ if (retcode != 0):
 
 ExecutedCommands.write("python %sExtractFromGenbank.py -i %s -o %s -s %s -a %s\n\n"%(loc,args.reference,RefDBNameFasta,RefDBNameNegstrand,RefDBNameGenomeFasta))
 ExecutedCommands.flush()
-#os.system("echo -e \"baba blacksheep\\n\\n\\n\\n\\nHave you any wool %s\""%(RefDBName))
 
-retcode = os.system("python %sAddFlankToGene.py -f %s -i coord.lst -o %s -r %s -s %s -m %s -t %s"%(loc,RefDBNameGenomeFasta,RefDBNameFlankFasta,args.flankregion,RefDBNameNegstrand,RefDBNameRangeMapping,RefDBNameRangeTrimming))
+retcode = os.system("python %sAddFlankToGene.py -f %s -i coord.lst -o %s -r %s -s %s -m %s -t %s"%(loc,RefDBNameGenomeFasta,RefDBNameFlankFasta,args.readlength,RefDBNameNegstrand,RefDBNameRangeMapping,RefDBNameRangeTrimming))
 if (retcode != 0):
 	sys.exit("Error generating modified reference file. Failed to add flanking regions.")
-ExecutedCommands.write("python %sAddFlankToGene.py -f %s -i coord.lst -o %s -r %s -s %s -m %s -t %s\n\n"%(loc,RefDBNameGenomeFasta,RefDBNameFlankFasta,args.flankregion,RefDBNameNegstrand,RefDBNameRangeMapping,RefDBNameRangeTrimming))
+ExecutedCommands.write("python %sAddFlankToGene.py -f %s -i coord.lst -o %s -r %s -s %s -m %s -t %s\n\n"%(loc,RefDBNameGenomeFasta,RefDBNameFlankFasta,args.readlength,RefDBNameNegstrand,RefDBNameRangeMapping,RefDBNameRangeTrimming))
 ExecutedCommands.flush()
 
 retcode = os.system("bowtie2-build %s %s%s 1>%sBuildingBowtie.log"%(RefDBNameFlankFasta,ReferenceFolder,RefDBNameFlank,LogsFolder))
@@ -309,5 +290,3 @@ os.system("date")
 ExecutedCommands.write("python %sGenotypingStrains.py -i %sgenotypes_%s.txt -o Genotype -S %s  -f %skey_genotypes_%s.txt -g %s -r %s -l %slinkage_groups.txt > %sGenotype.Log\n\n"
 	%(loc,MetaStrainerFolder,args.SampleName,args.SampleName,MetaStrainerFolder,args.SampleName,RefDBNameRangeMapping,RefDBNameFasta,PreprocessFolder,LogsFolder))
 ExecutedCommands.flush()
-
-#Optional
