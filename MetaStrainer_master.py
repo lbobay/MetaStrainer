@@ -22,7 +22,7 @@ parser.add_argument("-r","--reference", required=True, help="GenBank reference",
 parser.add_argument("-o","--output", required=True, help="output foldername")
 #Optional
 #Nov 24 2025. Flank is now an optional with default value of 150. Long option changed from flankregion to readlength
-parser.add_argument("-f","--flankregion", default=150, type = int, help="flank region to be added up stream and downsteam of genes for mapping.")
+parser.add_argument("-f","--readlength", default=150, type = int, help="flank region to be added up stream and downsteam of genes for mapping.")
 parser.add_argument("-S","--SampleName", help="Sample name. Can be helpful when batch running several samples. Default is output folder name")
 parser.add_argument("-s","--StrainThreshold",default=99.5,type=float,help="Threshold for defining a strain for merging")
 parser.add_argument("--threads", default=1, type = int, help="Number of threads to be used")
