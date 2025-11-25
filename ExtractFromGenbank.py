@@ -82,7 +82,7 @@ for record in SeqIO.parse(args.input, "genbank"):
 			sequence_name = ">" + record.id + "_" + str(start_id) + "_" + str(end)
 			
 			
-			if (feature.strand == -1):
+			if (feature.location.strand == -1):
 				sequence = str(record.seq[start:end].reverse_complement())
 				writeStrand.write(record.id + "_" + str(start_id) + "_" + str(end) + "\n")
 			else:
