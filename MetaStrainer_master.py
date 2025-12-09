@@ -9,9 +9,9 @@ import argparse
 parser = argparse.ArgumentParser(
 	description='''
 	MetaStrainer requires read pair fastq input file, a reference GeneBank file for alignment.
-	User is required to provide a region of DNA to be added upstream and downsteam of genes of interest.
-	It is recommended to be equal to the read length
-	SampleName is recommended especially when batch processing samples.''',
+	User is recommended to provide a region of DNA to be added upstream and downsteam of genes of interest to improve mapping. The default is set to 150bp.
+	SampleName is recommended especially when batch processing samples.
+	The default strain genotyping threshold is 99.5%. It can be adjusted using -s/--StrainThreshold''',
 	formatter_class=argparse.RawDescriptionHelpFormatter
 	)
 
