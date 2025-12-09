@@ -199,7 +199,20 @@ if (retcode != 0):
 ExecutedCommands.write("samtools view -@ %s -h %s_sort_sen_nounal.bam > %s_sort_sen_nounal.sam\n\n"%(args.threads,MappingName,MappingName))
 ExecutedCommands.flush()
 
+##Check Reference coverage, if it is less than 60%, terminate
+os.system("samtools depth -a %s_sort_sen_nounal.bam | awk '{c++; if($3>0) total+=1}END{print (total/c)*100}' > Coverage.tmp" % (MappingName))
 
+if (retcode != 0):
+	sys.exit("Error mapping fastq files to reference")
+ExecutedCommands.write("\n\nsamtools depth -a %s_sort_sen_nounal.bam | awk '{c++; if($3>0) total+=1}END{print (total/c)*100}' > Coverage.tmp\n\n" % (MappingName))
+	
+ExecutedCommands.flush()
+with open("Coverage.tmp","r") as depth_file:
+	depth = float(depth_file.readline().strip())
+	if depth < 60:
+		sys.exit("Reference \"%s\" likely belongs to a different species or genus. Only %.1f%% was covered by reads.\nMetaStrainer will not produce a reliable result. Please select a proper reference and try again." % (RefFileName,depth))
+	elif depth < 70:
+		print("Reference \"%s\" likely belongs to a different species or a distant strain complex (<95%% identity). Only %.1f%% was covered by reads.\nGenotyping result may be unreliable. Please reevaluate reference choice\n\n" % (RefFileName,depth))
 
 
 
