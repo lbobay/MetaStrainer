@@ -133,7 +133,7 @@ RefDBNameFlank = RefDBName +"_" + str(args.readlength)#11242025: flankregion cha
 #RefDBNameFasta = RefDBName + ".fasta"
 RefDBNameGenomeFasta = ReferenceFolder +RefDBName + "_FullGenome.fasta"#RefSeq Syle
 #Gene Features with GeneBank coordinate (used downstream and in genotyping)
-RefDBNameFasta = ReferenceFolder +RefDBName + ".fasta"
+RefDBNameFasta = ReferenceFolder +RefDBName + "_0.fasta"#03182026: keep 0 in the filename to avoid confusing it with genome file.
 #Gene Features with flanking 5' and 3'regions (used from alignment only)
 RefDBNameFlankFasta = ReferenceFolder +RefDBName + "_" + str(args.readlength) +".fasta"#11242025: flankregion changed to readlength
 #Trimming information which may be modified from flank range if gene feature is at contig boundary
