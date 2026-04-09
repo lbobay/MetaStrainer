@@ -36,5 +36,13 @@ Strain threshold is at 99.5% whole-genome average nucleotide identity (ANI) betw
 Use a lower or higher threshold with the ``` -s/--StrainThreshold``` option.
 
 
+## Important Notes
+
+The community composition of the sample should be characterized before running MetaStrainer using appropriate taxonomic classification methods. If more than one closely related species, under the same genus, are present it strongly advised to use the right species genome that is closest to the ones close to the samples. While MetaStrainer can stop processing if a distant species is used, a closely related but wrong species would still map and cause problems with strain inferences due to issues such as cross-mapping. 
+
+Some unique environments are not suffeciently represented in general databases. It may be useful to prepare a custom reference database for proper taxonomic characterization of non-model organisms or unique niches in host-specific environments.
+
 
 ## Citation
+
+Sharaf H, Bobay L-M. MetaStrainer: Accurate reconstruction of bacterial strain genotypes from short-read metagenomic samples. bioRxiv. 2026. doi:10.64898/2026.03.02.709061. https://www.biorxiv.org/content/10.64898/2026.03.02.709061v1
