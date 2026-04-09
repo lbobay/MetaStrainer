@@ -627,7 +627,7 @@ TotalStrain2 = strain2Changes + N_strain2Changes
 TotalStrain3 = strain3Changes + N_strain3Changes
 OutputLogName = args.SampleName + "_GenotypingStatistics.txt"
 with open(OutputLogName,"w") as writeStat:
-	writeStat.write("Pairwise strains by variants:\t%s\t%s\t%s\n"%(strain_1v2,strain_1v3,strain_1v3))
+	writeStat.write("Pairwise strains by variants:\t%s\t%s\t%s\n"%(strain_1v2,strain_1v3,strain_2v3))#minor typo 2v3
 	writeStat.write("Genes with changes %s\n"%(len(ReferenceChange)))
 	writeStat.write("Positions changes %s\n"%(variantCounter))
 	writeStat.write("Processed peaks %s\n"%(peakCount))
