@@ -21,6 +21,12 @@
 #Excluding some MGE features to reduce hypervariable genes adding noise and inflating strain count
 #TODO: make it user customisable later
 
+
+#Date: 9th of April, 2026 Location: Blacksburg, VA (USA)
+#Keep genes in a given list such as a list of core genes
+
+#TODO: add output to a LogFile
+
 import os
 import argparse
 import sys
@@ -35,12 +41,31 @@ parser.add_argument("-o","--output", required=True, help="Output Fasta file")
 parser.add_argument("-s","--strand", required=True, help="Strand information")
 parser.add_argument("-a","--assembly", required=True, help="Output Genome chromosomes/contigs fasta file")
 parser.add_argument("-c","--coordinates", default="coord.lst", help="Coordinates")
+parser.add_argument("-C","--coregenes", help="List of genes to keep")
 
 args = parser.parse_args()
 
 if not (os.path.exists(args.input)):
 	errorMessage = "GenBank file " + args.input+ " for -i/--input does not exist"
 	sys.exit(errorMessage)
+
+if args.coregenes:
+    if not os.path.isfile(args.coregenes):
+        errorMessage = "Core genes list file " + args.coregenes+ " for -C/--coregenes does not exist"
+        sys.exit(errorMessage)
+
+coreGenesSet = set()
+if args.coregenes:
+	with open(args.coregenes) as coreGenesFile:
+		lines = coreGenesFile.readline()
+		while lines:
+			geneID = lines.strip("\n")
+			coreGenesSet.add(geneID)
+			lines = coreGenesFile.readline()
+
+	if len(coreGenesSet) == 0:
+		errorMessage = "Core genes list file " + args.coregenes+ " is empty or not readable"
+		sys.exit(errorMessage)
 
 #Debuging GenBank files for discrepancies
 geneFeaturesCount = 0
@@ -84,6 +109,11 @@ CDSProductDictionary = {}
 
 #Mar 16 2026
 
+
+
+#Apr 9 2026
+#Track excluded non-core/accessory genes
+skipAccessoryGeneCount = 0
 
 for record in SeqIO.parse(args.input, "genbank"):
 	#print("Contig %s "%(record.id))
@@ -158,6 +188,14 @@ for record in SeqIO.parse(args.input, "genbank"):
 				continue
 
 			############
+
+			#Apr 09 2026
+			############
+			#Skip Accessory/Non-core genes
+			sequence_id = sequence_name.lstrip(">")
+			if len(coreGenesSet) > 0 and sequence_id not in coreGenesSet:
+				skipAccessoryGeneCount = skipAccessoryGeneCount + 1
+				continue
 						
 			if (feature.location.strand == -1):
 				sequence = str(record.seq[start:end].reverse_complement())
@@ -185,4 +223,6 @@ print("GenBank gene features: %s"%(geneFeaturesCount))
 print("GenBank CDS features: %s"%(CDSFeaturesCount))
 print("Skipped Pseudo Genes: %s"%(skipPseudoCount))
 print("Skipped MGE Genes: %s"%(skipMGECount))
+if len(coreGenesSet) > 0:
+	print("Skipped accessory genes: %s (%.2f%%)"%(skipAccessoryGeneCount,((skipAccessoryGeneCount*100)/geneFeaturesCount)))
 print("Written Mapping Reference Genes: %s"%(writtenGeneCount))
