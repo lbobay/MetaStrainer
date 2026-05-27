@@ -41,6 +41,7 @@ parser.add_argument("-o","--output", required=True, help="Output Fasta file")
 parser.add_argument("-s","--strand", required=True, help="Strand information")
 parser.add_argument("-a","--assembly", required=True, help="Output Genome chromosomes/contigs fasta file")
 parser.add_argument("-c","--coordinates", default="coord.lst", help="Coordinates")
+parser.add_argument("--no-skip-mge",action="store_true",help="Do not skip MGE and Pseudo genes")
 parser.add_argument("-C","--coregenes", help="List of genes to keep")
 
 args = parser.parse_args()
@@ -168,26 +169,27 @@ for record in SeqIO.parse(args.input, "genbank"):
 			sequence_name = ">" + record.id + "_" + str(start_id) + "_" + str(end)
 
 
-			#Mar 16 2026
-			############
-			#Skip Pseudo Genes
-			if "pseudo" in feature.qualifiers:
-				skipPseudoCount = skipPseudoCount + 1
-				continue
+			if not args.no_skip_mge:
+				#Mar 16 2026
+				############
+				#Skip Pseudo Genes
+				if "pseudo" in feature.qualifiers:
+					skipPseudoCount = skipPseudoCount + 1
+					continue
 
-			#Skip MGE
-			productName = CDSProductDictionary.get(sequence_name,"")
+				#Skip MGE
+				productName = CDSProductDictionary.get(sequence_name,"")
 
-			found = False
-			for MGE in excludeMGESet:
-				if MGE in productName:
-					found = True
-					break
-			if found:
-				skipMGECount = skipMGECount + 1
-				continue
+				found = False
+				for MGE in excludeMGESet:
+					if MGE in productName:
+						found = True
+						break
+				if found:
+					skipMGECount = skipMGECount + 1
+					continue
 
-			############
+				############
 
 			#Apr 09 2026
 			############
