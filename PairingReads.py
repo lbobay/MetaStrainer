@@ -302,10 +302,15 @@ for name in variants:
 			for N in poly[name][pos]:
 				nb=tmp.count(N)
 				if nb >=2 and (nb/original_tot < 0.01 or nb/original_tot > 0.99):
+					#May 26 2026: Do not remove MAF here and treat it as non-reference alleles, other minor allele will be deleted
+					#If more than 100 reads cover a variant, non-ref needs to be kept.
+					if (nb/original_tot > 0.99 and N != ref[name][pos]):
+						continue
+					########################
 					train.remove(nb)
 					nucleotides.remove(N)
 					tot-=nb
-					kick.append(N)	
+					kick.append(N)
 
 
 			#Hazem, kick loop after removing 1 %
@@ -324,19 +329,40 @@ for name in variants:
 				i+=1					
 			#Hazem: if only 1 allele exist but it is different than reference, keep track of it for reconstruction later on
 			if len(poly[name][pos]) == 1:
+				#May 26 2026: Keeping MAF > 99% if different than reference Allele.
+				#Need to use a copy of the above if condition handling here as well to properly capture non-reference alleles
+				#Can not delete above occurence
+				#
+				if (poly[name][pos][0] != ref[name][pos]):
+					#Needed the following or else it will be supurious
+					nb=tmp.count(poly[name][pos][0])
+					if (nb/tot == 1):
+						file_singleton_noref.write(name + "\t" + str(pos) + "\t" + poly[name][pos][0] + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
+						singleton_allele_noref_count = singleton_allele_noref_count + 1
+						if tot > 10:
+							singleton_allele_noref_10reads_count = singleton_allele_noref_10reads_count + 1
+						#if (name == "MZNG01000002.1_89086_93303" and (pos == 3939 or pos == 4215)):
+						#	print("Supposedly writing " + name + "\t" + str(pos) + "\t" + N + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb))
+					#else:
+						#if (name == "MZNG01000002.1_89086_93303" and (pos == 3939 or pos == 4215)):
+						#	print("\n***Did not write pos %s with NB %s and tot %s fake N %s and proper %s in %s ***\n"%(pos,nb,tot,N,poly[name][pos][0],poly[name][pos]))
+				else:
+					file_singleton_ref.write(name + "\t" + str(pos) + "\t" + N + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
+
+
 				del poly[name][pos]
-				logfile.write("%s\t%s\n"%(name,pos))
+				logfile.write("Deleteing first step %s\t%s\n"%(name,pos))##May 26 2026: Tracking when deleting alleles happen
 		elif len(poly[name][pos]) <= 1:
 			if (len(poly[name][pos]) == 1 and poly[name][pos][0] != ref[name][pos]):
 				salvage = salvage + 1
 				#print that if salvage counter is more than 0
 			del poly[name][pos]
-			logfile.write("%s\t%s\n"%(name,pos))
+			logfile.write("Deleting second step %s\t%s\n"%(name,pos))##May 26 2026: Tracking when deleting alleles happen
 		#Hazem: sometimes list are empty but position is not deleted
 		if (pos in poly[name] and len(poly[name][pos]) <=1):
 			#print("Deleting position in Name: ",name,"\tPos: ",pos,"\t Length: ",str(len(poly[name][pos])),"\t Content: ",poly[name][pos])
 			del poly[name][pos]
-			logfile.write("%s\t%s\n"%(name,pos))
+			logfile.write("Deleting third step %s\t%s\n"%(name,pos))##May 26 2026: Tracking when deleting alleles happen
 	#variants[name]=""
 			
 print("Salvaged %s more positions"%(salvage))#if that is ever more than 0 then I will need to print them to file
