@@ -200,19 +200,29 @@ ExecutedCommands.write("samtools view -@ %s -h %s_sort_sen_nounal.bam > %s_sort_
 ExecutedCommands.flush()
 
 ##Check Reference coverage, if it is less than 60%, terminate
-os.system("samtools depth -a %s_sort_sen_nounal.bam | awk '{c++; if($3>0) total+=1}END{print (total/c)*100}' > Coverage.tmp" % (MappingName))
+#June 03 2026: Get sequencing depth as well.
+os.system("samtools depth -a %s_sort_sen_nounal.bam | awk '{c++; if($3>0) {total+=1; depth+=$3;} }END{print (total/c)*100 \"\\t\" depth/total  }' > Coverage.tmp" % (MappingName))
 
 if (retcode != 0):
 	sys.exit("Error mapping fastq files to reference")
-ExecutedCommands.write("\n\nsamtools depth -a %s_sort_sen_nounal.bam | awk '{c++; if($3>0) total+=1}END{print (total/c)*100}' > Coverage.tmp\n\n" % (MappingName))
+ExecutedCommands.write("\n\nsamtools depth -a %s_sort_sen_nounal.bam | awk '{c++; if($3>0) {total+=1; depth+=$3;} }END{print (total/c)*100 \"\\t\" depth/total  }' > Coverage.tmp\n\n" % (MappingName))
 	
 ExecutedCommands.flush()
 with open("Coverage.tmp","r") as depth_file:
-	depth = float(depth_file.readline().strip())
-	if depth < 60:
-		sys.exit("Reference \"%s\" likely belongs to a different species or genus. Only %.1f%% was covered by reads.\nMetaStrainer will not produce a reliable result. Please select a proper reference and try again." % (RefFileName,depth))
-	elif depth < 70:
-		print("Reference \"%s\" likely belongs to a different species or a distant strain complex (<95%% identity). Only %.1f%% was covered by reads.\nGenotyping result may be unreliable. Please reevaluate reference choice\n\n" % (RefFileName,depth))
+#June 03 2026
+#Adding sequencing depth control
+#Special handling of sample sequence depth between 20x and 50x
+	coverage, depth = map(float, depth_file.readline().split())
+	if coverage < 60:
+		sys.exit("Reference \"%s\" likely belongs to a different species or genus. Only %.1f%% was covered by reads.\nMetaStrainer will not produce a reliable result. Please select a proper reference and try again." % (RefFileName,coverage))
+	elif coverage < 70:
+		print("Reference \"%s\" likely belongs to a different species or a distant strain complex (<95%% identity). Only %.1f%% was covered by reads.\nGenotyping result may be unreliable. Please reevaluate reference choice\n\n" % (RefFileName,coverage))
+		print("Checking sequencing depth next.....")
+	if depth < 20:
+		sys.exit("Average sample coverage for this sample is %.1f which is less than 20x." % (depth))
+	elif depth < 50:
+		print("Average depth is %.1f. Only the major allele above 70%% will be included and one strain will be genotyped." % (depth))
+
 
 
 
@@ -231,28 +241,34 @@ PreprocessFolder=args.output+"/Preprocess/"
 os.chdir(PreprocessFolder)
 
 print("Processing Read Pairs")
-os.system("python %sPairingReads.py -s %s_sort_sen_nounal.sam -m %s -r %s -t %s -n %s > %sPairingReads.log"
-	%(loc,MappingName,RefDBNameRangeMapping,RefDBNameFasta,RefDBNameRangeTrimming,RefDBNameNegstrand,LogsFolder))
+#June 23 2026
+#Add SampleName to ensure forward compatibility with the GenotypingStrains.py script
+#File will be copied later
+os.system("python %sPairingReads.py -s %s_sort_sen_nounal.sam -m %s -r %s -t %s -n %s -S %s > %sPairingReads.log"
+	%(loc,MappingName,RefDBNameRangeMapping,RefDBNameFasta,RefDBNameRangeTrimming,RefDBNameNegstrand,args.SampleName,LogsFolder))
 if (retcode != 0):
 	sys.exit("Error generating variants list. Check SAM file or any of the reference database files.")
-ExecutedCommands.write("python %sPairingReads.py -s %s_sort_sen_nounal.sam -m %s -r %s -t %s -n %s > %sPairingReads.log\n\n"
-	%(loc,MappingName,RefDBNameRangeMapping,RefDBNameFasta,RefDBNameRangeTrimming,RefDBNameNegstrand,LogsFolder))
+ExecutedCommands.write("python %sPairingReads.py -s %s_sort_sen_nounal.sam -m %s -r %s -t %s -n %s -S %s > %sPairingReads.log\n\n"
+	%(loc,MappingName,RefDBNameRangeMapping,RefDBNameFasta,RefDBNameRangeTrimming,RefDBNameNegstrand,args.SampleName,LogsFolder))
 ExecutedCommands.flush()
 os.system("date")
 
-print("Generating Linkage groups")
-os.system("python %sLinkageGroups.py> %sLinkgageGroups.log"%(loc,LogsFolder))
-if (retcode != 0):
-	sys.exit("Error generating linkage groups.")
-ExecutedCommands.write("python %sLinkageGroups.py > %sLinkgageGroups.log\n\n"%(loc,LogsFolder))
-ExecutedCommands.flush()
+#June 23 2026
+#Run steps only if above 50x coverage
+if depth > 50:
+	print("Generating Linkage groups")
+	os.system("python %sLinkageGroups.py> %sLinkgageGroups.log"%(loc,LogsFolder))
+	if (retcode != 0):
+		sys.exit("Error generating linkage groups.")
+	ExecutedCommands.write("python %sLinkageGroups.py > %sLinkgageGroups.log\n\n"%(loc,LogsFolder))
+	ExecutedCommands.flush()
 
-print("Generating linkgage groups variant pairs")
-os.system("python %sMakeContigPairs.py > %sContigPairs.log"%(loc,LogsFolder))
-if (retcode != 0):
-	sys.exit("Error generating contig pairs.")
-ExecutedCommands.write("python %sMakeContigPairs.py > %sContigPairs.log\n\n"%(loc,LogsFolder))
-ExecutedCommands.flush()
+	print("Generating linkgage groups variant pairs")
+	os.system("python %sMakeContigPairs.py > %sContigPairs.log"%(loc,LogsFolder))
+	if (retcode != 0):
+		sys.exit("Error generating contig pairs.")
+	ExecutedCommands.write("python %sMakeContigPairs.py > %sContigPairs.log\n\n"%(loc,LogsFolder))
+	ExecutedCommands.flush()
 
 
 #MetaStrainer
@@ -266,14 +282,29 @@ except:
 MetaStrainerFolder=args.output+"/MetaStrainer/"
 os.chdir(MetaStrainerFolder)
 
-print("Running core MetaStrainer chain")
-os.system("python %sCoreChain.py -S %s -s %scontig_singles.txt -p %scontig_pairs.txt --seed %s > %sMetaStrainerChain.log"
-	%(loc,args.SampleName,PreprocessFolder,PreprocessFolder,args.seed,LogsFolder))
-if (retcode != 0):
-	sys.exit("Error running MetaStrainer chain")
-ExecutedCommands.write("python %sCoreChain.py -S %s -s %scontig_singles.txt -p %scontig_pairs.txt --seed %s> %sMetaStrainerChain.log\n\n"
-	%(loc,args.SampleName,PreprocessFolder,PreprocessFolder,args.seed,LogsFolder))
-ExecutedCommands.flush()
+
+#June 23 2026
+#Run Core chain script only if above 50x coverage otherwise carry over from pairing step
+if depth >= 50:
+	print("Running core MetaStrainer chain")
+	os.system("python %sCoreChain.py -S %s -s %scontig_singles.txt -p %scontig_pairs.txt --seed %s > %sMetaStrainerChain.log"
+		%(loc,args.SampleName,PreprocessFolder,PreprocessFolder,args.seed,LogsFolder))
+	if (retcode != 0):
+		sys.exit("Error running MetaStrainer chain")
+	ExecutedCommands.write("python %sCoreChain.py -S %s -s %scontig_singles.txt -p %scontig_pairs.txt --seed %s> %sMetaStrainerChain.log\n\n"
+		%(loc,args.SampleName,PreprocessFolder,PreprocessFolder,args.seed,LogsFolder))
+	ExecutedCommands.flush()
+else:
+	#move key genotypes from PreProcessing to MetaStrainer folder to ensure smooth transition to GenotypingStrains.py after skipping MetaStrainer
+	os.system("mv %skey_genotypes_%s.txt %s"%(PreprocessFolder,args.SampleName,MetaStrainerFolder))
+	if (retcode != 0):
+		sys.exit("Error bypassing MetaStrainer. Frequency file is in accessible. Sample sequencing depth is between 20x-50x.")
+	os.system("  > genotypes_%s.txt"%(args.SampleName))
+	if (retcode != 0):
+		sys.exit("Error bypassing MetaStrainer. Could not create placeholder genotypes file. Sample sequencing depth is between 20x-50x.")
+	ExecutedCommands.write("mv %s%s %s"%(PreprocessFolder,args.SampleName,MetaStrainerFolder))
+	ExecutedCommands.flush()
+
 
 
 #Genotyping

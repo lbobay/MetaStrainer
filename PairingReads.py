@@ -13,10 +13,19 @@ parser.add_argument("--stat", default="PreprocessingStat.log", help="Summary of 
 #Bring them back, needed to properly trim genes at contigs 3' or 5' ends
 parser.add_argument("-t","--trimflankfile",required=True, help="trim information")
 parser.add_argument("-n","--negstrand",required=True, help="complementary strand information")
+#Jun 23 2026
+#Adding SampleName option to keep options flow consistent. 
+parser.add_argument("-S","--SampleName",default="",help="SampleName")
 args = parser.parse_args()
 
 logfile = open(args.logfile,"w",buffering=100)
 summaryfile = open(args.stat,"w",buffering=100)
+
+#Jun 03 2026
+#VCF like output
+#variantsfile = open("allvariants.log","w",buffering=100)
+#removedVariants = open("removedvariants.log","w",buffering=100)
+#Jun 22 Do that later
 
 locus_trim_hash = {}
 #with open("/Users/hazemsharaf/Projects/Bee_variants_project/core_genome/Gapicola_MZNG_flankTrim_150.txt") as input_file:
@@ -222,6 +231,33 @@ alpha["T"]="y"
 variants = {key : dict(sorted(val.items(), key = lambda ele: ele[0]))
        for key, val in variants.items()}
 
+#June 03 2026
+#Handling of low coverage samples
+#Store coverage of variant positions
+varPoly = {}
+countVar = 0
+sumVar = 0
+for name in variants:
+	varPoly[name]={}
+	for pos in variants[name]:
+		varPoly[name][pos]= list(set(variants[name][pos]))
+		if len(varPoly[name][pos]) > 1:
+			tot=0.0
+			countVar = countVar +1
+			tmp = variants[name][pos][1:]
+			for N in varPoly[name][pos]:
+				nb=tmp.count(N)
+				#if nb >= 2:
+				#	tot+=nb
+				tot+=nb
+			sumVar = sumVar + tot
+			for N in varPoly[name][pos]:
+				nb=tmp.count(N)
+				#variantsfile.write("%s\t%s\t%s\t%s\t%s"(name,pos, N, nb, tot))
+averageCoverage = sumVar/countVar
+
+#Block1
+
 #Will write file after removing anomalous coverage Jul 29th (Giza, Egypt)
 #Write singletons down
 #After meeting with Louis-Marie: Keep Track of singleton similar to Ref and not similar to Ref
@@ -231,148 +267,11 @@ salvage = 0
 poly={}
 singleton_allele_noref_count = 0
 singleton_allele_noref_10reads_count = 0
-for name in variants:
-	poly[name]={}
-	for pos in variants[name]:
-		poly[name][pos]= list(set(variants[name][pos]))
-		kick=[]
-		if (name == "MZNG01000002.1_89086_93303" and (pos == 3939 or pos == 4215)):
-			print("---------\nStarting Loop for problems")
-			print("Reference is %s" % (ref[name][pos]))
-			print("Position %s  (%s) has the following" %(pos,(int(pos)+151)))
-			print("Poly %s"%(poly[name][pos]))
-			print("Length Poly %s"%(len(poly[name][pos])))
-			print("Variants length is %s" % (len(variants[name][pos][1:])))
-			print("Variants no. items = %s " % len(set(variants[name][pos])))
-			print("NoIndex Variants length %s" % (len(variants[name][pos])))
-			print("Variants items = %s " % (set(variants[name][pos])))
-			print("---------")
-			
-		if len(poly[name][pos]) > 1:
-			#print(poly[name][pos])
-			#print(variants[name][pos])
-			tot=0.0
-			train=[]
-			nucleotides=[]
-			tmp = variants[name][pos][1:]
-			for N in poly[name][pos]:
-				nb=tmp.count(N)
-				if nb >= 2:																				# Minimum number of reads to call a variant
-					train.append(nb)
-					nucleotides.append(N)
-					tot+=nb
-				else:
-					kick.append(N)
 
-			#Hazem, move kick loop up and clean
-			for N in kick:
-				while N in poly[name][pos]:
-					poly[name][pos].remove(N)
-			kick = []
-
-			if (name == "MZNG01000002.1_89086_93303" and (pos == 3939 or pos == 4215)):
-				print("Done kicking...showing variants remaining")
-				print(poly[name][pos])
-				print(len(poly[name][pos]))
-				print("See? Problem here")
-
-
-			#if condition and keep singleton alleles
-			if len(poly[name][pos]) == 1:
-				if (poly[name][pos][0] != ref[name][pos]):
-					#Needed the following or else it will be supurious
-					nb=tmp.count(poly[name][pos][0])
-					if (nb/tot == 1):
-						file_singleton_noref.write(name + "\t" + str(pos) + "\t" + poly[name][pos][0] + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
-						singleton_allele_noref_count = singleton_allele_noref_count + 1
-						if tot > 10:
-							singleton_allele_noref_10reads_count = singleton_allele_noref_10reads_count + 1
-						#if (name == "MZNG01000002.1_89086_93303" and (pos == 3939 or pos == 4215)):
-						#	print("Supposedly writing " + name + "\t" + str(pos) + "\t" + N + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb))
-					#else:
-						#if (name == "MZNG01000002.1_89086_93303" and (pos == 3939 or pos == 4215)):
-						#	print("\n***Did not write pos %s with NB %s and tot %s fake N %s and proper %s in %s ***\n"%(pos,nb,tot,N,poly[name][pos][0],poly[name][pos]))
-				else:
-					file_singleton_ref.write(name + "\t" + str(pos) + "\t" + N + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
-				#Do not remove now
-				#del poly[name][pos]
-
-			#Hazem: Remove alleles <1% or more than >99%
-			original_tot = tot
-			for N in poly[name][pos]:
-				nb=tmp.count(N)
-				if nb >=2 and (nb/original_tot < 0.01 or nb/original_tot > 0.99):
-					#May 26 2026: Do not remove MAF here and treat it as non-reference alleles, other minor allele will be deleted
-					#If more than 100 reads cover a variant, non-ref needs to be kept.
-					if (nb/original_tot > 0.99 and N != ref[name][pos]):
-						continue
-					########################
-					train.remove(nb)
-					nucleotides.remove(N)
-					tot-=nb
-					kick.append(N)
-
-
-			#Hazem, kick loop after removing 1 %
-			for N in kick:
-				while N in poly[name][pos]:
-					poly[name][pos].remove(N)
-			i=0
-			while i < len(train):
-				nb=train[i]
-				N = nucleotides[i]
-				#Hazem: make sure single alleles are removed from singles but tracked in singleton output for later merge
-				if N in alpha and len(train) > 1:
-				#if N in alpha:
-					#h.write(name + "\t" + str(pos) + "\t" + N + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
-					pass
-				i+=1					
-			#Hazem: if only 1 allele exist but it is different than reference, keep track of it for reconstruction later on
-			if len(poly[name][pos]) == 1:
-				#May 26 2026: Keeping MAF > 99% if different than reference Allele.
-				#Need to use a copy of the above if condition handling here as well to properly capture non-reference alleles
-				#Can not delete above occurence
-				#
-				if (poly[name][pos][0] != ref[name][pos]):
-					#Needed the following or else it will be supurious
-					nb=tmp.count(poly[name][pos][0])
-					if (nb/tot == 1):
-						file_singleton_noref.write(name + "\t" + str(pos) + "\t" + poly[name][pos][0] + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
-						singleton_allele_noref_count = singleton_allele_noref_count + 1
-						if tot > 10:
-							singleton_allele_noref_10reads_count = singleton_allele_noref_10reads_count + 1
-						#if (name == "MZNG01000002.1_89086_93303" and (pos == 3939 or pos == 4215)):
-						#	print("Supposedly writing " + name + "\t" + str(pos) + "\t" + N + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb))
-					#else:
-						#if (name == "MZNG01000002.1_89086_93303" and (pos == 3939 or pos == 4215)):
-						#	print("\n***Did not write pos %s with NB %s and tot %s fake N %s and proper %s in %s ***\n"%(pos,nb,tot,N,poly[name][pos][0],poly[name][pos]))
-				else:
-					file_singleton_ref.write(name + "\t" + str(pos) + "\t" + N + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
-
-
-				del poly[name][pos]
-				logfile.write("Deleteing first step %s\t%s\n"%(name,pos))##May 26 2026: Tracking when deleting alleles happen
-		elif len(poly[name][pos]) <= 1:
-			if (len(poly[name][pos]) == 1 and poly[name][pos][0] != ref[name][pos]):
-				salvage = salvage + 1
-				#print that if salvage counter is more than 0
-			del poly[name][pos]
-			logfile.write("Deleting second step %s\t%s\n"%(name,pos))##May 26 2026: Tracking when deleting alleles happen
-		#Hazem: sometimes list are empty but position is not deleted
-		if (pos in poly[name] and len(poly[name][pos]) <=1):
-			#print("Deleting position in Name: ",name,"\tPos: ",pos,"\t Length: ",str(len(poly[name][pos])),"\t Content: ",poly[name][pos])
-			del poly[name][pos]
-			logfile.write("Deleting third step %s\t%s\n"%(name,pos))##May 26 2026: Tracking when deleting alleles happen
-	#variants[name]=""
-			
-print("Salvaged %s more positions"%(salvage))#if that is ever more than 0 then I will need to print them to file
-summaryfile.write("Singletons\t%s\n"%(singleton_allele_noref_count))
-summaryfile.write("Singletons (min. 10 reads)\t%s\n"%(singleton_allele_noref_10reads_count))
-summaryfile.close()
-
-file_singleton_ref.close()
-file_singleton_noref.close()
-#sys.exit()#Added that temporary since I just need to reprocess the singleton to print them correctly. Comment when running reprocessing a sample from scratch
+#June 03 2026
+#Handling of low coverage samples
+#Moving this block up here before if condition testing for coverage
+#Block2
 #Filter anomalous depths (should come from command line)
 depthSetting = args.depth
 geneSet = {}
@@ -384,77 +283,298 @@ filteredBelow = 0
 deletPosResu = set()
 deleteCounter = 0
 h = open("tmp_singles.txt","w")
-for name in poly:
-	if name not in geneSet:
-		geneSet[name] = []
 
-	for pos in poly[name]:
-		#poly[name][pos]= list(set(variants[name][pos]))
-		tot=0.0
-		tmp = variants[name][pos][1:]
-		for N in poly[name][pos]:
-			nb=tmp.count(N)
-			tot+=nb
-		globalAlleleDepth.append(tot)
-		geneSet[name].append(tot)
+if (averageCoverage < 20):
+	sys("Preprocessing/Mapping Error: uncaught case of low coverage. Average Coverage detected is: %s \n\n"%(averageCoverage))
+elif (averageCoverage < 50):
+	#Hazem Sharaf: between 3rd of June 2026 and 24th of June 2026
+	#Special handling for coverage between 20x - 50x
+	#Only dominant strain with allele frequencies above 70% will be produced.
+	#Other alleles will be set to N
+	#To ensure backward compatibility with downstream scripts, the non-reference alleles file will be utilised.
+	#Reference alleles below 70% will be set to N, otherwise, they are naturally passed down and thus will not be written.
+	#If reference alleles are written, an error is triggered in the genotyping script and logs.
+	for name in variants:
+		poly[name]={}
+		for pos in variants[name]:
+			poly[name][pos]= list(set(variants[name][pos]))
+			kick=[]
+			if len(poly[name][pos]) > 1:
+				#print(poly[name][pos])
+				#print(variants[name][pos])
+				tot=0.0
+				train=[]
+				nucleotides=[]
+				tmp = variants[name][pos][1:]
+				for N in poly[name][pos]:
+					nb=tmp.count(N)
+					if nb >= 2:																				# Minimum number of reads to call a variant
+						train.append(nb)
+						nucleotides.append(N)
+						tot+=nb
+					else:
+						kick.append(N)
 
-	deletePositions = []
-	for pos in poly[name]:
-		tot=0.0
-		tmp = variants[name][pos][1:]
-		for N in poly[name][pos]:
-			nb=tmp.count(N)
-			tot+=nb
+				#Hazem, move kick loop up and clean
+				for N in kick:
+					while N in poly[name][pos]:
+						poly[name][pos].remove(N)
+				kick = []
 
-		geneMeanDepth = numpy.mean(geneSet[name])
-		geneDepthSD = numpy.std(geneSet[name])
+				if len(poly[name][pos]) > 1:
+					tot = 0.0
+					maxN = ""
+					maxN_Count = 0
+					writeN = False
+					for N in poly[name][pos]:
+						nb=tmp.count(N)
+						tot+=nb
+						#Track and Right the highest allele
+						if nb > maxN_Count:
+							maxN = N
+							maxN_Count = nb
+					for N in poly[name][pos]:
+						nb=tmp.count(N)
+						#write only the domiant allele if not similar to the reference
+						#Only write non-reference to keep file behaviour in downstream genotyping: June 23rd 2026
+						#But write reference if set to N
+						if (nb/tot >= 0.70):#I don't have to check writeN here
+							#Checking N not the static poly[name][pos][0] as there are more than 1 allele
+							if (N != ref[name][pos]):
+								file_singleton_noref.write(name + "\t" + str(pos) + "\t" + N + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
+								writeN = True
+						else:
+							#This condition is needed so that reference alleles are written only if N and positions are written only once
+							if (writeN != True and nb == maxN_Count):
+								file_singleton_noref.write(name + "\t" + str(pos) + "\t" + "N" + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
+								writeN = True
+	print("Skipping MetaStrainer")
+	#Maintaining same behaviour to ensure compatibility with the GenotypingStrains.py script
+	key=open("key_genotypes_" + args.SampleName + ".txt","w")
+	#Will keep it this way, the 3 strains will be merged and a new key file will be produced to keep current behaviour
+	key.write("1\t1.0\n2\t0.0\n3\t0.0\n" )
+	key.close()
+	#Maintaining same behaviour to ensure compatibility with the GenotypingStrains.py script
+	linkage=open("linkage_groups.txt","w");linkage.close()
+	logfile.write("Average coverage is %s\nEnding preprocessing without singles and pairs.\n" %(averageCoverage))
+	#No error should be triggered on the HPC handling script and to avoid extra controls there.
+	sys.exit(0)
+else:
+	for name in variants:
+		poly[name]={}
+		for pos in variants[name]:
+			poly[name][pos]= list(set(variants[name][pos]))
+			kick=[]
+			if (name == "MZNG01000002.1_89086_93303" and (pos == 3939 or pos == 4215)):
+				print("---------\nStarting Loop for problems")
+				print("Reference is %s" % (ref[name][pos]))
+				print("Position %s  (%s) has the following" %(pos,(int(pos)+151)))
+				print("Poly %s"%(poly[name][pos]))
+				print("Length Poly %s"%(len(poly[name][pos])))
+				print("Variants length is %s" % (len(variants[name][pos][1:])))
+				print("Variants no. items = %s " % len(set(variants[name][pos])))
+				print("NoIndex Variants length %s" % (len(variants[name][pos])))
+				print("Variants items = %s " % (set(variants[name][pos])))
+				print("---------")
+				
+			if len(poly[name][pos]) > 1:
+				#print(poly[name][pos])
+				#print(variants[name][pos])
+				tot=0.0
+				train=[]
+				nucleotides=[]
+				tmp = variants[name][pos][1:]
+				for N in poly[name][pos]:
+					nb=tmp.count(N)
+					if nb >= 2:																				# Minimum number of reads to call a variant
+						train.append(nb)
+						nucleotides.append(N)
+						tot+=nb
+					else:
+						kick.append(N)
 
-		if tot >= (geneMeanDepth - geneDepthSD*depthSetting) and tot <= (geneMeanDepth + geneDepthSD*depthSetting):
-			
-			passingVariants = passingVariants + 1
-		else:
-			filtered = filtered + 1
-			if tot < (geneMeanDepth - geneDepthSD*depthSetting):
-				filteredBelow = filteredBelow + 1
-			if tot > (geneMeanDepth + geneDepthSD*depthSetting):
-				filteredAbove = filteredAbove + 1
-			#Delete position
-			deletePositions.append(pos)
+				#Hazem, move kick loop up and clean
+				for N in kick:
+					while N in poly[name][pos]:
+						poly[name][pos].remove(N)
+				kick = []
 
-	for pos in deletePositions:
-		del poly[name][pos]
-		logfile.write("Deleted\t%s\t%s\tDepth\n"%(name,pos))
-		deleteCounter = deleteCounter + 1
+				if (name == "MZNG01000002.1_89086_93303" and (pos == 3939 or pos == 4215)):
+					print("Done kicking...showing variants remaining")
+					print(poly[name][pos])
+					print(len(poly[name][pos]))
+					print("See? Problem here")
 
 
-#Deleting positions with anomalous coverage
-print("Removed a further ", deleteCounter," anomalous depth positions")
+				#if condition and keep singleton alleles
+				if len(poly[name][pos]) == 1:
+					if (poly[name][pos][0] != ref[name][pos]):
+						#Needed the following or else it will be supurious
+						nb=tmp.count(poly[name][pos][0])
+						if (nb/tot == 1):
+							file_singleton_noref.write(name + "\t" + str(pos) + "\t" + poly[name][pos][0] + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
+							singleton_allele_noref_count = singleton_allele_noref_count + 1
+							if tot > 10:
+								singleton_allele_noref_10reads_count = singleton_allele_noref_10reads_count + 1
+							#if (name == "MZNG01000002.1_89086_93303" and (pos == 3939 or pos == 4215)):
+							#	print("Supposedly writing " + name + "\t" + str(pos) + "\t" + N + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb))
+						#else:
+							#if (name == "MZNG01000002.1_89086_93303" and (pos == 3939 or pos == 4215)):
+							#	print("\n***Did not write pos %s with NB %s and tot %s fake N %s and proper %s in %s ***\n"%(pos,nb,tot,N,poly[name][pos][0],poly[name][pos]))
+					else:
+						file_singleton_ref.write(name + "\t" + str(pos) + "\t" + N + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
+					#Do not remove now
+					#del poly[name][pos]
 
-#Loop again to avoid RuntimeError: dictionary changed size during iteration
-#Writing singles
-for name in poly:
-	for pos in poly[name]:
-		tot=0.0
-		train=[]
-		nucleotides=[]
-		tmp = variants[name][pos][1:]
-		for N in poly[name][pos]:
-			nb=tmp.count(N)
-			train.append(nb)
-			nucleotides.append(N)
-			tot+=nb
-		i=0
-		while i < len(train):
-			nb=train[i]
-			N = nucleotides[i]
-			#Hazem: make sure single alleles are removed from singles but tracked in singleton output for later merge
-			if N in alpha and len(train) > 1:
-				h.write(name + "\t" + str(pos) + "\t" + N + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
-			i+=1
-	variants[name]=""
+				#Hazem: Remove alleles <1% or more than >99%
+				original_tot = tot
+				for N in poly[name][pos]:
+					nb=tmp.count(N)
+					if nb >=2 and (nb/original_tot < 0.01 or nb/original_tot > 0.99):
+						#May 26 2026: Do not remove MAF here and treat it as non-reference alleles, other minor allele will be deleted
+						#If more than 100 reads cover a variant, non-ref needs to be kept.
+						if (nb/original_tot > 0.99 and N != ref[name][pos]):
+							continue
+						########################
+						train.remove(nb)
+						nucleotides.remove(N)
+						tot-=nb
+						kick.append(N)
 
-print("Wrote %s variants and filtered %s variants\n of which %s are above filtering thresholds and %s are below filtering threshold"%(passingVariants,filtered, filteredAbove, filteredBelow))
-h.close()
+
+				#Hazem, kick loop after removing 1 %
+				for N in kick:
+					while N in poly[name][pos]:
+						poly[name][pos].remove(N)
+				i=0
+				while i < len(train):
+					nb=train[i]
+					N = nucleotides[i]
+					#Hazem: make sure single alleles are removed from singles but tracked in singleton output for later merge
+					if N in alpha and len(train) > 1:
+					#if N in alpha:
+						#h.write(name + "\t" + str(pos) + "\t" + N + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
+						pass
+					i+=1					
+				#Hazem: if only 1 allele exist but it is different than reference, keep track of it for reconstruction later on
+				if len(poly[name][pos]) == 1:
+					#May 26 2026: Keeping MAF > 99% if different than reference Allele.
+					#Need to use a copy of the above if condition handling here as well to properly capture non-reference alleles
+					#Can not delete above occurence
+					#
+					if (poly[name][pos][0] != ref[name][pos]):
+						#Needed the following or else it will be supurious
+						nb=tmp.count(poly[name][pos][0])
+						if (nb/tot == 1):
+							file_singleton_noref.write(name + "\t" + str(pos) + "\t" + poly[name][pos][0] + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
+							singleton_allele_noref_count = singleton_allele_noref_count + 1
+							if tot > 10:
+								singleton_allele_noref_10reads_count = singleton_allele_noref_10reads_count + 1
+							#if (name == "MZNG01000002.1_89086_93303" and (pos == 3939 or pos == 4215)):
+							#	print("Supposedly writing " + name + "\t" + str(pos) + "\t" + N + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb))
+						#else:
+							#if (name == "MZNG01000002.1_89086_93303" and (pos == 3939 or pos == 4215)):
+							#	print("\n***Did not write pos %s with NB %s and tot %s fake N %s and proper %s in %s ***\n"%(pos,nb,tot,N,poly[name][pos][0],poly[name][pos]))
+					else:
+						file_singleton_ref.write(name + "\t" + str(pos) + "\t" + N + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
+
+
+					del poly[name][pos]
+					logfile.write("Deleteing first step %s\t%s\n"%(name,pos))##May 26 2026: Tracking when deleting alleles happen
+			elif len(poly[name][pos]) <= 1:
+				if (len(poly[name][pos]) == 1 and poly[name][pos][0] != ref[name][pos]):
+					salvage = salvage + 1
+					#print that if salvage counter is more than 0
+				del poly[name][pos]
+				logfile.write("Deleting second step %s\t%s\n"%(name,pos))##May 26 2026: Tracking when deleting alleles happen
+			#Hazem: sometimes list are empty but position is not deleted
+			if (pos in poly[name] and len(poly[name][pos]) <=1):
+				#print("Deleting position in Name: ",name,"\tPos: ",pos,"\t Length: ",str(len(poly[name][pos])),"\t Content: ",poly[name][pos])
+				del poly[name][pos]
+				logfile.write("Deleting third step %s\t%s\n"%(name,pos))##May 26 2026: Tracking when deleting alleles happen
+		#variants[name]=""
+				
+	print("Salvaged %s more positions"%(salvage))#if that is ever more than 0 then I will need to print them to file
+	summaryfile.write("Singletons\t%s\n"%(singleton_allele_noref_count))
+	summaryfile.write("Singletons (min. 10 reads)\t%s\n"%(singleton_allele_noref_10reads_count))
+	summaryfile.close()
+
+	file_singleton_ref.close()
+	file_singleton_noref.close()
+	#sys.exit()#Added that temporary since I just need to reprocess the singleton to print them correctly. Comment when running reprocessing a sample from scratch
+
+	#Block2 moved up #Jun3 2026
+	for name in poly:
+		if name not in geneSet:
+			geneSet[name] = []
+
+		for pos in poly[name]:
+			#poly[name][pos]= list(set(variants[name][pos]))
+			tot=0.0
+			tmp = variants[name][pos][1:]
+			for N in poly[name][pos]:
+				nb=tmp.count(N)
+				tot+=nb
+			globalAlleleDepth.append(tot)
+			geneSet[name].append(tot)
+
+		deletePositions = []
+		for pos in poly[name]:
+			tot=0.0
+			tmp = variants[name][pos][1:]
+			for N in poly[name][pos]:
+				nb=tmp.count(N)
+				tot+=nb
+
+			geneMeanDepth = numpy.mean(geneSet[name])
+			geneDepthSD = numpy.std(geneSet[name])
+
+			if tot >= (geneMeanDepth - geneDepthSD*depthSetting) and tot <= (geneMeanDepth + geneDepthSD*depthSetting):
+				
+				passingVariants = passingVariants + 1
+			else:
+				filtered = filtered + 1
+				if tot < (geneMeanDepth - geneDepthSD*depthSetting):
+					filteredBelow = filteredBelow + 1
+				if tot > (geneMeanDepth + geneDepthSD*depthSetting):
+					filteredAbove = filteredAbove + 1
+				#Delete position
+				deletePositions.append(pos)
+
+		for pos in deletePositions:
+			del poly[name][pos]
+			logfile.write("Deleted\t%s\t%s\tDepth\n"%(name,pos))
+			deleteCounter = deleteCounter + 1
+
+
+	#Deleting positions with anomalous coverage
+	print("Removed a further ", deleteCounter," anomalous depth positions")
+
+	#Loop again to avoid RuntimeError: dictionary changed size during iteration
+	#Writing singles
+	for name in poly:
+		for pos in poly[name]:
+			tot=0.0
+			train=[]
+			nucleotides=[]
+			tmp = variants[name][pos][1:]
+			for N in poly[name][pos]:
+				nb=tmp.count(N)
+				train.append(nb)
+				nucleotides.append(N)
+				tot+=nb
+			i=0
+			while i < len(train):
+				nb=train[i]
+				N = nucleotides[i]
+				#Hazem: make sure single alleles are removed from singles but tracked in singleton output for later merge
+				if N in alpha and len(train) > 1:
+					h.write(name + "\t" + str(pos) + "\t" + N + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
+				i+=1
+		variants[name]=""
+
+	print("Wrote %s variants and filtered %s variants\n of which %s are above filtering thresholds and %s are below filtering threshold"%(passingVariants,filtered, filteredAbove, filteredBelow))
+	h.close()
 
 
 

@@ -360,10 +360,14 @@ for gene in ReferenceChange:
 
 		if (strain2[gene][position] == strain3[gene][position]):
 			strain23_sim = strain23_sim + 1
-
-print("Strain1 Vs. Strain2 (by Variants) %s \t(by total ref) %s"%( (strain12_sim/variantCounter) * 100 ,(strain12_sim/totalRefLength) * 100 ) )
-print("Strain1 Vs. Strain3 (by Variants) %s \t(by total ref) %s"%( (strain13_sim/variantCounter) * 100 ,(strain13_sim/totalRefLength) * 100 ) )
-print("Strain2 Vs. Strain3 (by Variants) %s \t(by total ref) %s"%( (strain23_sim/variantCounter) * 100 ,(strain23_sim/totalRefLength) * 100 ) )
+#June 23 2026, Hazem Sharaf
+#Add handling for empty variants in case of <50x coverage and MetaStrainer is bypassed
+if variantCounter > 0:
+	print("Strain1 Vs. Strain2 (by Variants) %s \t(by total ref) %s"%( (strain12_sim/variantCounter) * 100 ,(strain12_sim/totalRefLength) * 100 ) )
+	print("Strain1 Vs. Strain3 (by Variants) %s \t(by total ref) %s"%( (strain13_sim/variantCounter) * 100 ,(strain13_sim/totalRefLength) * 100 ) )
+	print("Strain2 Vs. Strain3 (by Variants) %s \t(by total ref) %s"%( (strain23_sim/variantCounter) * 100 ,(strain23_sim/totalRefLength) * 100 ) )
+else:
+	print("variantCounter is %s: sequencing depth is likely < 50x."%(variantCounter))
 #sys.exit("Done Early to know strain similarlity")
 
 #genomw-wide identical variants 
@@ -385,40 +389,54 @@ print("Debug Pairwise final strain 1v2  (%s)" %(strain_1v2))
 print("Debug Pairwise final strain 1v3  (%s)" %(strain_1v3))
 print("Debug Pairwise final strain 2v3  (%s)" %(strain_2v3))
 
+#June 24 2026, Hazem Sharaf
+#Add handling for empty variants in case of <50x coverage and MetaStrainer is bypassed
+if variantCounter > 0:
+	#identical variants 
+	strain_1v2_identicalVariants = (strain12_sim/variantCounter) * 100
+	strain_1v3_identicalVariants = (strain13_sim/variantCounter) * 100
+	strain_2v3_identicalVariants = (strain23_sim/variantCounter) * 100
 
-#identical variants 
-strain_1v2_identicalVariants = (strain12_sim/variantCounter) * 100
-strain_1v3_identicalVariants = (strain13_sim/variantCounter) * 100
-strain_2v3_identicalVariants = (strain23_sim/variantCounter) * 100
 
-
-print("Debug identical Strain1  (%s)" %((strain_1v2_identicalVariants + strain_1v3_identicalVariants)))
-print("Debug identical Strain2  (%s)" %((strain_1v2_identicalVariants + strain_2v3_identicalVariants)))
-print("Debug identical Strain3  (%s)" %((strain_1v3_identicalVariants + strain_2v3_identicalVariants)))
-
-if (strain_1v2 >= args.StrainThreshold and strain_1v3 >= args.StrainThreshold and strain_2v3 >= args.StrainThreshold):
-	print("Printing Only One Strain")
-	sampleFrequency['strain1'] = sampleFrequency['strain1'] + sampleFrequency['strain2'] + sampleFrequency['strain3']
-	del sampleFrequency['strain2']
-	del sampleFrequency['strain3']
-elif strain_1v2 >= args.StrainThreshold:
-	print("Printing Strains 1 and 3")
-	sampleFrequency['strain1'] = sampleFrequency['strain1'] + sampleFrequency['strain2']
-	del sampleFrequency['strain2']
-elif strain_1v3 >= args.StrainThreshold:
-	print("Printing Strains 1 and 2")
-	sampleFrequency['strain1'] = sampleFrequency['strain1'] + sampleFrequency['strain3']
-	del sampleFrequency['strain3']
-elif strain_2v3 >= args.StrainThreshold:
-	print("Printing Strains 1 and 2 (not 3). Strain2 frequency is updated")
-	sampleFrequency['strain2'] = sampleFrequency['strain3'] + sampleFrequency['strain2']
-	del sampleFrequency['strain3']
+	print("Debug identical Strain1  (%s)" %((strain_1v2_identicalVariants + strain_1v3_identicalVariants)))
+	print("Debug identical Strain2  (%s)" %((strain_1v2_identicalVariants + strain_2v3_identicalVariants)))
+	print("Debug identical Strain3  (%s)" %((strain_1v3_identicalVariants + strain_2v3_identicalVariants)))
 else:
-	print("Printing Strains Kollo Allesta")
-#elif strain_1v2 >= args.StrainThreshold and strain_1v3 >= args.StrainThreshold
-#	print("Only one strain detected at %s% threshold")
-#	system.exit("Strain composition error. Exit")
+	print("variantCounter is %s: sequencing depth is likely < 50x." %(variantCounter))
 
+#June 24 2026, Hazem Sharaf
+#Add handling for empty variants in case of <50x coverage and MetaStrainer is bypassed
+#Only oneStrainer is printed. Maintain handling output format as before
+if variantCounter > 0:
+	if (strain_1v2 >= args.StrainThreshold and strain_1v3 >= args.StrainThreshold and strain_2v3 >= args.StrainThreshold):
+		print("Printing Only One Strain")
+		sampleFrequency['strain1'] = sampleFrequency['strain1'] + sampleFrequency['strain2'] + sampleFrequency['strain3']
+		del sampleFrequency['strain2']
+		del sampleFrequency['strain3']
+	elif strain_1v2 >= args.StrainThreshold:
+		print("Printing Strains 1 and 3")
+		sampleFrequency['strain1'] = sampleFrequency['strain1'] + sampleFrequency['strain2']
+		del sampleFrequency['strain2']
+	elif strain_1v3 >= args.StrainThreshold:
+		print("Printing Strains 1 and 2")
+		sampleFrequency['strain1'] = sampleFrequency['strain1'] + sampleFrequency['strain3']
+		del sampleFrequency['strain3']
+	elif strain_2v3 >= args.StrainThreshold:
+		print("Printing Strains 1 and 2 (not 3). Strain2 frequency is updated")
+		sampleFrequency['strain2'] = sampleFrequency['strain3'] + sampleFrequency['strain2']
+		del sampleFrequency['strain3']
+	else:
+		print("Printing All 3 Strains")
+	#elif strain_1v2 >= args.StrainThreshold and strain_1v3 >= args.StrainThreshold
+	#	print("Only one strain detected at %s% threshold")
+	#	system.exit("Strain composition error. Exit")
+else:
+	#June 24 2026, Hazem Sharaf
+	#Keep Behaviour as previous
+	sampleFrequency['strain1'] = sampleFrequency['strain1']
+	del sampleFrequency['strain2']
+	del sampleFrequency['strain3']
+	print("Coverage is less than 50x. Printing only the dominant strain. Others are not genotyped")
 
 output = open("strainRef.fasta","w")
 i = 0
