@@ -234,27 +234,12 @@ variants = {key : dict(sorted(val.items(), key = lambda ele: ele[0]))
 #June 03 2026
 #Handling of low coverage samples
 #Store coverage of variant positions
-varPoly = {}
-countVar = 0
-sumVar = 0
-for name in variants:
-	varPoly[name]={}
-	for pos in variants[name]:
-		varPoly[name][pos]= list(set(variants[name][pos]))
-		if len(varPoly[name][pos]) > 1:
-			tot=0.0
-			countVar = countVar +1
-			tmp = variants[name][pos][1:]
-			for N in varPoly[name][pos]:
-				nb=tmp.count(N)
-				#if nb >= 2:
-				#	tot+=nb
-				tot+=nb
-			sumVar = sumVar + tot
-			for N in varPoly[name][pos]:
-				nb=tmp.count(N)
-				#variantsfile.write("%s\t%s\t%s\t%s\t%s"(name,pos, N, nb, tot))
-averageCoverage = sumVar/countVar
+
+#July 15 2026
+#Unroll depth calculation and relying on cvalues generated in previous step usimg samtools depth command
+#Calculation is variable by organism and referefence coverage
+with open("Coverage.tmp","r") as depth_file:
+	averageCoverage, averageDepth = map(float, depth_file.readline().split())
 
 #Block1
 
@@ -284,9 +269,9 @@ deletPosResu = set()
 deleteCounter = 0
 h = open("tmp_singles.txt","w")
 
-if (averageCoverage < 20):
-	sys("Preprocessing/Mapping Error: uncaught case of low coverage. Average Coverage detected is: %s \n\n"%(averageCoverage))
-elif (averageCoverage < 50):
+if (averageDepth < 20):
+	sys("Preprocessing/Mapping Error: uncaught case of low coverage. Average Coverage detected is: %s \n\n"%(averageDepth))
+elif (averageDepth < 50):
 	#Hazem Sharaf: between 3rd of June 2026 and 24th of June 2026
 	#Special handling for coverage between 20x - 50x
 	#Only dominant strain with allele frequencies above 70% will be produced.
@@ -356,7 +341,7 @@ elif (averageCoverage < 50):
 	key.close()
 	#Maintaining same behaviour to ensure compatibility with the GenotypingStrains.py script
 	linkage=open("linkage_groups.txt","w");linkage.close()
-	logfile.write("Average coverage is %s\nEnding preprocessing without singles and pairs.\n" %(averageCoverage))
+	logfile.write("Average depth is %s\nEnding preprocessing without singles and pairs.\n" %(averageDepth))
 	#No error should be triggered on the HPC handling script and to avoid extra controls there.
 	sys.exit(0)
 else:
