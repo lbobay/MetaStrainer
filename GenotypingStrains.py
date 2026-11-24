@@ -40,12 +40,18 @@ parser.add_argument("-r","--reference", required=True,help="Reference fasta file
 parser.add_argument("-g","--genemap", required=True, help="map matrix family name to core gene id in cluster file")
 parser.add_argument("-l","--linkgage", required=True, default="linkage_groups.txt",help="gene linkage file")
 parser.add_argument("-o","--output",default="SampleX_Statistics_",help="Name of output statistics")
-#parser.add_argument("-N","--Number", default=3, type=int,help="Number of strain peaks in MetaStrainer composition file")
 parser.add_argument("-S","--SampleName",default="",help="SampleName to name output strains as per Louis-Marie request")
 parser.add_argument("--singleton",default="../Preprocess/singles_singleton_noref.txt",help="Non-reference alleles file")
 parser.add_argument("-s","--StrainThreshold",default=99.5,type=float,help="Threshold for defining a strain for merging")
 parser.add_argument("-f","--FrequencyFile",required=True,help="File with initial sample composition")
 parser.add_argument('--logfile',help="Logging Errors",default="Genotyping_errorLog.txt")
+
+#Nov 17 2026
+parser.add_argument("-m","--minReadThreshold",default=5,type=int,help="Number of reads required below which an allele is changed to N")#Nov 17 2026
+parser.add_argument("--genomewidedepthfile",default="genomeWideDepthFile.txt",help="All positions depths will be read from this file")
+parser.add_argument("-N","--NBaseThreshold", default=0.5, type=float,help="Percent proportion of N to keep a strain after coverage and confidence")
+
+
 args = parser.parse_args()
 
 
@@ -78,6 +84,8 @@ with open(args.FrequencyFile) as input_FrequencyFile:
 		sampleFrequency[strainName] = float(lineContents[1])
 		strainNum = strainNum - 1
 		lines = input_FrequencyFile.readline()
+		print("Keys\n")
+		print("Strain %s")
 
 
 
@@ -438,6 +446,145 @@ else:
 	del sampleFrequency['strain3']
 	print("Coverage is less than 50x. Printing only the dominant strain. Others are not genotyped")
 
+
+#Nov 17 2026
+#parser.add_argument("-m","--minReadThreshold",default=5,type=int,help="Number of reads required below which an allele is changed to N")#Nov 17 2026
+#parser.add_argument("--genomewidedepthfile",default="genomeWideDepthFile.txt",help="All positions depths will be written to this file")
+genomeWideDepthList = {}
+
+with open(args.genomewidedepthfile,"r") as alldepthfile:
+	lines = alldepthfile.readline()
+	while lines:
+		lineContents = lines.strip("\n").split("\t")
+		geneID = lineContents[0]
+		position = int(lineContents[1])#This file is 0-based so do not adjust
+		readcount = int(lineContents[2])
+		if geneID not in genomeWideDepthList:
+			genomeWideDepthList[geneID] = {}
+
+
+		genomeWideDepthList[geneID][position] = readcount
+		lines = alldepthfile.readline()
+globalDepthNCount = 0
+globalDepthINDELCount = 0
+geneNotMappedCount = 0
+
+#Nov 20 2026
+#Filter out strains based on N as well
+# Usually least strain is taken out.
+globalDepthN_Strain1Count = 0
+globalDepthN_Strain2Count = 0
+globalDepthN_Strain3Count = 0
+
+for geneID in referenceSeq:
+	if geneID not in genomeWideDepthList:
+		geneNotMappedCount = geneNotMappedCount + 1
+		continue
+	i = 0
+	geneLength = len(referenceSeq[geneID])
+	
+	
+	while i < geneLength:
+		triggerINDEL = False
+		triggerSEQ = False
+		if "strain1" in sampleFrequency:
+			if (i not in genomeWideDepthList[geneID]):
+				#strain1[geneID][i] = "N"
+				triggerINDEL = True
+			else:
+				estimateReadCount = sampleFrequency['strain1'] * genomeWideDepthList[geneID][i]
+				if estimateReadCount < 5:
+					strain1[geneID][i] = "N"
+					globalDepthN_Strain1Count = globalDepthN_Strain1Count + 1
+					triggerSEQ = True
+		if "strain2" in sampleFrequency:
+			if (i not in genomeWideDepthList[geneID]):
+				#strain1[geneID][i] = "N"
+				triggerINDEL = True
+			else:
+				estimateReadCount = sampleFrequency['strain2'] * genomeWideDepthList[geneID][i]
+				if estimateReadCount < 5:
+					strain2[geneID][i] = "N"
+					globalDepthN_Strain2Count = globalDepthN_Strain2Count + 1
+					triggerSEQ = True
+		if "strain3" in sampleFrequency:
+			if (i not in genomeWideDepthList[geneID]):
+				#strain3[geneID][i] = "N"
+				triggerINDEL = True
+			else:
+				estimateReadCount = sampleFrequency['strain3'] * genomeWideDepthList[geneID][i]
+				if estimateReadCount < 5:
+					strain3[geneID][i] = "N"
+					globalDepthN_Strain3Count = globalDepthN_Strain3Count + 1
+					triggerSEQ = True
+		i = i + 1
+		#Statistics and tracking
+		if triggerINDEL:
+			globalDepthINDELCount = globalDepthINDELCount + 1
+		if triggerSEQ:
+			globalDepthNCount = globalDepthNCount + 1
+
+
+##Delete Strains and update frequency
+#Several cases
+
+strainDeleteList = []
+globalNProportion = args.NBaseThreshold / 100
+
+print("\n\nDetected GlobalN setting %s \n\n"%(globalNProportion))
+
+if (globalDepthN_Strain1Count / totalRefLength) >= globalNProportion:
+	print("Deleting Strain1 for high proportion of N")
+	ErrorLogger.write("Removing Strain1 for for high proportion of N")
+	strainDeleteList.append("strain1")
+else:
+	print("\n\n\nNs in Strain1 genotype = %s\t%.4f"%(globalDepthN_Strain1Count,float(globalDepthN_Strain1Count / totalRefLength)))
+
+if (globalDepthN_Strain2Count / totalRefLength) >= globalNProportion:
+	print("Deleting Strain2 for high proportion of N")
+	ErrorLogger.write("Removing Strain2 for for high proportion of N")
+	strainDeleteList.append("strain2")
+else:
+	print("\n\n\nNs in Strain2 genotype = %s\t%.4f"%(globalDepthN_Strain2Count,float(globalDepthN_Strain2Count / totalRefLength)))
+
+if (globalDepthN_Strain3Count / totalRefLength) >= globalNProportion:
+	print("Deleting Strain3 for high proportion of N")
+	ErrorLogger.write("Removing Strain3 for for high proportion of N")
+	strainDeleteList.append("strain3")
+else:
+	print("\n\n\nNs in Strain3 genotype = %s\t%.4f"%(globalDepthN_Strain3Count,float(globalDepthN_Strain3Count / totalRefLength)))
+
+for strain in strainDeleteList:
+	del sampleFrequency[strain]
+
+remainingStrains = list(sampleFrequency.keys())
+
+if (len(remainingStrains) == 0):
+	print("All strains are removed!!!\nNo strains are printed\n")
+	ErrorLogger.write("All strains are removed!!!\nNo strains are printed\n")
+	sys.exit("Revise threshold and genotype again")
+elif (len(remainingStrains) == 1):
+	#I can just keep it strain1 but just in case something is wrong and order is still reversed for when I increase to 4 strains
+	sampleFrequency[remainingStrains[0]] = 1.0
+elif (len(remainingStrains) == 2):
+	totalRemainingFrequency = sum( sampleFrequency[strain] for strain in remainingStrains )
+
+	#Just in case Patrick's reported bug is still around
+	if totalRemainingFrequency <= 0:
+		ErrorLogger.write("ZeroFrequency Error\n")
+		sys.exit("Zero frequency error!!!")
+	for strain in remainingStrains:
+		sampleFrequency[strain] = (sampleFrequency[strain] / totalRemainingFrequency )
+
+
+
+#Nov: 19 postpone INDEL handling
+#End of Nov 17 updates
+#################################################
+
+
+
+
 output = open("strainRef.fasta","w")
 i = 0
 non_empty_sequence = 0
@@ -461,75 +608,85 @@ OutputSampleName = ""
 if args.SampleName != "":
 	OutputSampleName = args.SampleName + "_"
 
-output = open(OutputSampleName + "strain1.fasta","w")
-i = 0
-non_empty_sequence = 0
-problem = 0
-for gene in strain1:
-	geneID = "strain1&" + gene
-	sequence = "".join(strain1[gene])
-	if sequence == "" or len(sequence) < 200:
-		problem = problem + 1
-		continue
-	else:
-		non_empty_sequence += 1
-	if i == 0:
-		output.write(">"+geneID+"\n"+sequence)
-	else:
-		output.write("\n>"+geneID+"\n"+sequence)
-	i = i + 1 #incrementing sequence count
-output.close()
-print("Written %s sequences and skipped %s empty sequences" %(non_empty_sequence,problem))
+#Sun Nov 22 2026
+#Since I delete more strains now, I have to rewrite this block to make it a little more dynamic
+#Again, while technically strain is always printed since it is the highest proportion but go through strian loop just in case
+
+for strain in sampleFrequency:
+
+	#This is spaghetti code that I was warned against in CSCI 106
+	#But I just need that to work. I need to also refactor above code for when I expand to a 4th strain in MetaStrain Chain core
+	strainNameDict = globals()[strain]
+
+	output = open(OutputSampleName + strain + ".fasta","w")
+	i = 0
+	non_empty_sequence = 0
+	problem = 0
+	for gene in strainNameDict:
+		geneID = strain + "&" + gene
+		sequence = "".join(strainNameDict[gene])
+		if sequence == "" or len(sequence) < 200:
+			problem = problem + 1
+			continue
+		else:
+			non_empty_sequence += 1
+		if i == 0:
+			output.write(">"+geneID+"\n"+sequence)
+		else:
+			output.write("\n>"+geneID+"\n"+sequence)
+		i = i + 1 #incrementing sequence count
+	output.close()
+	print("Written %s sequences and skipped %s empty sequences" %(non_empty_sequence,problem))
 if (strain_1v2 >= args.StrainThreshold and strain_1v3 >= args.StrainThreshold and strain_2v3 >= args.StrainThreshold):
 	print("Only one strain detected at %s%% threshold"%(args.StrainThreshold))
 	#system.exit("Strain composition error. Printed only 1 strain. Quit...")
 
 
-if strain_1v2 < args.StrainThreshold:
-	output = open(OutputSampleName + "strain2.fasta","w")
-	i = 0
-	non_empty_sequence = 0
-	problem = 0
-	for gene in strain2:
-		geneID = "strain2&" + gene
-		sequence = "".join(strain2[gene])
-		if sequence == "" or len(sequence) < 200:
-			problem = problem + 1
-			continue
-		else:
-			non_empty_sequence += 1
-		if i == 0:
-			output.write(">"+geneID+"\n"+sequence)
-		else:
-			output.write("\n>"+geneID+"\n"+sequence)
-		i = i + 1 #incrementing sequence count
+# if strain_1v2 < args.StrainThreshold:
+# 	output = open(OutputSampleName + "strain2.fasta","w")
+# 	i = 0
+# 	non_empty_sequence = 0
+# 	problem = 0
+# 	for gene in strain2:
+# 		geneID = "strain2&" + gene
+# 		sequence = "".join(strain2[gene])
+# 		if sequence == "" or len(sequence) < 200:
+# 			problem = problem + 1
+# 			continue
+# 		else:
+# 			non_empty_sequence += 1
+# 		if i == 0:
+# 			output.write(">"+geneID+"\n"+sequence)
+# 		else:
+# 			output.write("\n>"+geneID+"\n"+sequence)
+# 		i = i + 1 #incrementing sequence count
 		
-	output.close()
-	print("Strain2: Written %s sequences and skipped %s empty sequences" %(non_empty_sequence,problem))
+# 	output.close()
+# 	print("Strain2: Written %s sequences and skipped %s empty sequences" %(non_empty_sequence,problem))
 
 
-if (strain_1v3 < args.StrainThreshold and strain_2v3 < args.StrainThreshold):
-	output = open(OutputSampleName + "strain3.fasta","w")
-	i = 0
-	non_empty_sequence = 0
-	problem = 0
-	for gene in strain3:
-		geneID = "strain3&" + gene
-		sequence = "".join(strain3[gene])
-		if sequence == "" or len(sequence) < 200:
-			problem = problem + 1
-			continue
-		else:
-			non_empty_sequence += 1
-		if i == 0:
-			output.write(">"+geneID+"\n"+sequence)
-		else:
-			output.write("\n>"+geneID+"\n"+sequence)
-		i = i + 1 #incrementing sequence count
+# if (strain_1v3 < args.StrainThreshold and strain_2v3 < args.StrainThreshold):
+# 	output = open(OutputSampleName + "strain3.fasta","w")
+# 	i = 0
+# 	non_empty_sequence = 0
+# 	problem = 0
+# 	for gene in strain3:
+# 		geneID = "strain3&" + gene
+# 		sequence = "".join(strain3[gene])
+# 		if sequence == "" or len(sequence) < 200:
+# 			problem = problem + 1
+# 			continue
+# 		else:
+# 			non_empty_sequence += 1
+# 		if i == 0:
+# 			output.write(">"+geneID+"\n"+sequence)
+# 		else:
+# 			output.write("\n>"+geneID+"\n"+sequence)
+# 		i = i + 1 #incrementing sequence count
 
-	output.close()
+# 	output.close()
 
-	print("Strain3: Written %s sequences and skipped %s empty sequences" %(non_empty_sequence,problem))	
+# 	print("Strain3: Written %s sequences and skipped %s empty sequences" %(non_empty_sequence,problem))	
 
 if os.path.exists("./gene_files/"):
 	print("gene_file/ folder exists. Placing reconstructed genes/strains there...")
@@ -540,9 +697,12 @@ else:
 
 #Output a concatenated version for everything
 concatRef = ""
-concatStrain1 = ""
-concatStrain2 = ""
-concatStrain3 = ""
+concatStrains = {}
+#concatStrain2 = ""
+#concatStrain3 = ""
+
+for strain in sampleFrequency:
+    concatStrains[strain] = ""
 
 for gene in referenceSeq:
 
@@ -570,23 +730,17 @@ for gene in referenceSeq:
 		output.write("\n>"+geneID+"\n"+sequence)
 	concatRef = concatRef + sequence
 
-	geneID = "strain1&" + gene
-	sequence = "".join(strain1[gene])
-	if sequence == "" or len(sequence) < 200:
-		problem = problem + 1
-		continue
-	else:
-		non_empty_sequence += 1
-	if i == 0:
-		output.write(">"+geneID+"\n"+sequence)
-		i = i + 1
-	else:
-		output.write("\n>"+geneID+"\n"+sequence)
-	concatStrain1 = concatStrain1 + sequence
+	#Sun Nov 22 2026
+	#Since I delete more strains now, I have to rewrite this block to make it a little more dynamic
+	#Again, while technically strain is always printed since it is the highest proportion but go through strian loop just in case
 
-	if strain_1v2 < args.StrainThreshold:
-		geneID = "strain2&" + gene
-		sequence = "".join(strain2[gene])
+	#geneID = "strain1&" + gene
+	#sequence = "".join(strain1[gene])
+	for strain in sampleFrequency:
+		geneID = strain + "&" + gene
+		#Again the big of spaghetti code
+		sequence = "".join(globals()[strain][gene])
+
 		if sequence == "" or len(sequence) < 200:
 			problem = problem + 1
 			continue
@@ -597,22 +751,37 @@ for gene in referenceSeq:
 			i = i + 1
 		else:
 			output.write("\n>"+geneID+"\n"+sequence)
-		concatStrain2 = concatStrain2 + sequence
+		concatStrains[strain] += sequence
 
-	if (strain_1v3 < args.StrainThreshold and strain_2v3 < args.StrainThreshold):
-		geneID = "strain3&" + gene
-		sequence = "".join(strain3[gene])
-		if sequence == "" or len(sequence) < 200:
-			problem = problem + 1
-			continue
-		else:
-			non_empty_sequence += 1
-		if i == 0:
-			output.write(">"+geneID+"\n"+sequence)
-			i = i + 1
-		else:
-			output.write("\n>"+geneID+"\n"+sequence)
-		concatStrain3 = concatStrain3 + sequence
+	# if strain_1v2 < args.StrainThreshold:
+	# 	geneID = "strain2&" + gene
+	# 	sequence = "".join(strain2[gene])
+	# 	if sequence == "" or len(sequence) < 200:
+	# 		problem = problem + 1
+	# 		continue
+	# 	else:
+	# 		non_empty_sequence += 1
+	# 	if i == 0:
+	# 		output.write(">"+geneID+"\n"+sequence)
+	# 		i = i + 1
+	# 	else:
+	# 		output.write("\n>"+geneID+"\n"+sequence)
+	# 	concatStrain2 = concatStrain2 + sequence
+
+	# if (strain_1v3 < args.StrainThreshold and strain_2v3 < args.StrainThreshold):
+	# 	geneID = "strain3&" + gene
+	# 	sequence = "".join(strain3[gene])
+	# 	if sequence == "" or len(sequence) < 200:
+	# 		problem = problem + 1
+	# 		continue
+	# 	else:
+	# 		non_empty_sequence += 1
+	# 	if i == 0:
+	# 		output.write(">"+geneID+"\n"+sequence)
+	# 		i = i + 1
+	# 	else:
+	# 		output.write("\n>"+geneID+"\n"+sequence)
+	# 	concatStrain3 = concatStrain3 + sequence
 
 	output.close()
 
@@ -620,14 +789,19 @@ for gene in referenceSeq:
 with open(OutputSampleName + "ConcatenatedStrains.fasta","w") as concatStrain_file:
 	#concatStrain_file.write(">ConcatReference\n")
 	#concatStrain_file.write(concatRef + "\n")
-	concatStrain_file.write(">" + OutputSampleName + "ConcatStrain1\n")
-	concatStrain_file.write(concatStrain1 + "\n")
-	if strain_1v2 < args.StrainThreshold:
-		concatStrain_file.write(">" + OutputSampleName + "ConcatStrain2\n")
-		concatStrain_file.write(concatStrain2 + "\n")
-	if (strain_1v3 < args.StrainThreshold and strain_2v3 < args.StrainThreshold):
-		concatStrain_file.write(">" + OutputSampleName + "ConcatStrain3\n")
-		concatStrain_file.write(concatStrain3 + "\n")
+	
+	for strain in sampleFrequency:
+		concatStrain_file.write(">" + OutputSampleName + "Concat" + strain + "\n")
+		concatStrain_file.write(concatStrains[strain] + "\n")
+
+	# concatStrain_file.write(">" + OutputSampleName + "ConcatStrain1\n")
+	# concatStrain_file.write(concatStrain1 + "\n")
+	# if strain_1v2 < args.StrainThreshold:
+	# 	concatStrain_file.write(">" + OutputSampleName + "ConcatStrain2\n")
+	# 	concatStrain_file.write(concatStrain2 + "\n")
+	# if (strain_1v3 < args.StrainThreshold and strain_2v3 < args.StrainThreshold):
+	# 	concatStrain_file.write(">" + OutputSampleName + "ConcatStrain3\n")
+	# 	concatStrain_file.write(concatStrain3 + "\n")
 
 
 
@@ -658,6 +832,9 @@ with open(OutputLogName,"w") as writeStat:
 	writeStat.write("Strain1: %s changes. Ns: %s\tnon-N %s\n"%(TotalStrain1,N_strain1Changes,strain1Changes))
 	writeStat.write("Strain2: %s changes. Ns: %s\tnon-N %s\n"%(TotalStrain2,N_strain2Changes,strain2Changes))
 	writeStat.write("Strain3: %s changes. Ns: %s\tnon-N %s\n"%(TotalStrain3,N_strain3Changes,strain3Changes))
+	writeStat.write("\nGlobal Low Depth N: %s\n"%(globalDepthNCount))
+	writeStat.write("Global INDEL N(kept as is for now): %s\n"%(globalDepthINDELCount))
+	writeStat.write("Genes not mapped %s\n\n"%(geneNotMappedCount))
 	writeStat.write("Final Genotyped strains: %s\n"%(len(sampleFrequency)))
 
 with open("GenotypedStrainsCount.txt","w") as writeStrainCount:

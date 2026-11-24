@@ -16,6 +16,9 @@ parser.add_argument("-n","--negstrand",required=True, help="complementary strand
 #Jun 23 2026
 #Adding SampleName option to keep options flow consistent. 
 parser.add_argument("-S","--SampleName",default="",help="SampleName")
+#Nov 17 2026
+parser.add_argument("--genomewidedepthfile",default="genomeWideDepthFile.txt",help="All positions depths will be written to this file")
+
 args = parser.parse_args()
 
 logfile = open(args.logfile,"w",buffering=100)
@@ -160,7 +163,13 @@ for l in f:
 f.close()
 
 
-
+##Nov 17 2026 (Blacksburg, VA)
+#Keep Track of all variant position reads (starting with after filtering single read alleles for now)
+#After chat with Louis-Marie, This will be needed at genotyping to convert anything with less than 5 expected reads
+#to N, including non-variants that are common across all strains if the expected depth (% *. No of reads ) is less than 5.
+#That threshold will be customisable in the Genotyping script --minReadThreshold
+#THe goal is to reduce number of spurious genotyped strains when clustering
+allVariantsReadCount={}
 
 
 # Finds single polymorphisms
@@ -168,6 +177,7 @@ f.close()
 variants={}
 for gene_id in ref:
 	variants[gene_id]={}
+	allVariantsReadCount[gene_id]={}#Nov17 Variants count
 
 
 for read in dico:
@@ -203,6 +213,14 @@ for read in dico:
 				N2 = ref[gene[name]][rescale+i]
 				quality = ord(phred[i+adj]) - 33
 				#print(N1,N2,quality)
+
+				#Nov17 Variants count
+				if (rescale + i ) in allVariantsReadCount[gene[name]]:
+					allVariantsReadCount[gene[name]][rescale+i].append(N1)
+				else:
+					allVariantsReadCount[gene[name]][rescale+i]=[N2,N1]
+				####################
+
 				#Hazem: Set quality to 30
 				if quality >= 30:
 					try:
@@ -215,9 +233,14 @@ for read in dico:
 				i+=1
 
 
-#for name in variants:
-#	print(len(variants[name].keys() ) ) 
+#Nov 17 2026 change
+genomeWideDepthFile=open("genomeWideDepthFile.txt","w")
+for name in allVariantsReadCount:
+	for position in allVariantsReadCount[name]:
+		readCount = len(allVariantsReadCount[name][position])
 
+		genomeWideDepthFile.write("%s\t%s\t%s\n"%(name,position,readCount))
+genomeWideDepthFile.close
 
 
 
@@ -326,18 +349,18 @@ elif (averageDepth < 50):
 						if (nb/tot >= 0.70):#I don't have to check writeN here
 							#Checking N not the static poly[name][pos][0] as there are more than 1 allele
 							if (N != ref[name][pos]):
-								file_singleton_noref.write(name + "\t" + str(pos) + "\t" + N + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
+								file_singleton_noref.write("Dup1  " +  name + "\t" + str(pos) + "\t" + N + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
 								writeN = True
 						else:
 							#This condition is needed so that reference alleles are written only if N and positions are written only once
 							if (writeN != True and nb == maxN_Count):
-								file_singleton_noref.write(name + "\t" + str(pos) + "\t" + "N" + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
+								file_singleton_noref.write("Dup2  " + name + "\t" + str(pos) + "\t" + "N" + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
 								writeN = True
 	print("Skipping MetaStrainer")
 	#Maintaining same behaviour to ensure compatibility with the GenotypingStrains.py script
 	key=open("key_genotypes_" + args.SampleName + ".txt","w")
 	#Will keep it this way, the 3 strains will be merged and a new key file will be produced to keep current behaviour
-	key.write("1\t1.0\n2\t0.0\n3\t0.0\n" )
+	key.write("1\t0.0\n2\t0.0\n3\t1.0\n" )#Nov 19 2026: Fixed very minor bug with order of strains that resulted in 0 in combined table
 	key.close()
 	#Maintaining same behaviour to ensure compatibility with the GenotypingStrains.py script
 	linkage=open("linkage_groups.txt","w");linkage.close()
@@ -397,7 +420,7 @@ else:
 						#Needed the following or else it will be supurious
 						nb=tmp.count(poly[name][pos][0])
 						if (nb/tot == 1):
-							file_singleton_noref.write(name + "\t" + str(pos) + "\t" + poly[name][pos][0] + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
+							file_singleton_noref.write("Dup3  " + name + "\t" + str(pos) + "\t" + poly[name][pos][0] + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
 							singleton_allele_noref_count = singleton_allele_noref_count + 1
 							if tot > 10:
 								singleton_allele_noref_10reads_count = singleton_allele_noref_10reads_count + 1
@@ -451,7 +474,8 @@ else:
 						#Needed the following or else it will be supurious
 						nb=tmp.count(poly[name][pos][0])
 						if (nb/tot == 1):
-							file_singleton_noref.write(name + "\t" + str(pos) + "\t" + poly[name][pos][0] + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
+							#This is re
+							#file_singleton_noref.write("Dup4  " +name + "\t" + str(pos) + "\t" + poly[name][pos][0] + "\t" +  str(nb/tot) + "\t" + str(tot) + "\t" + str(nb) + "\n")
 							singleton_allele_noref_count = singleton_allele_noref_count + 1
 							if tot > 10:
 								singleton_allele_noref_10reads_count = singleton_allele_noref_10reads_count + 1
